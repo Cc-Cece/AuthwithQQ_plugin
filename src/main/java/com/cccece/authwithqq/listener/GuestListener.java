@@ -95,8 +95,8 @@ public class GuestListener implements Listener {
           // Apply allow-move potion effects
           boolean allowMove = plugin.getConfig().getBoolean("guest-mode.allow-move", true);
           if (!allowMove) {
-            player.addPotionEffect(new PotionEffect(PotionEffectType.SLOW, Integer.MAX_VALUE, 255, false, false));
-            player.addPotionEffect(new PotionEffect(PotionEffectType.JUMP, Integer.MAX_VALUE, 128, false, false)); // Level 128 for no jump
+            player.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, Integer.MAX_VALUE, 255, false, false));
+            player.addPotionEffect(new PotionEffect(PotionEffectType.JUMP_BOOST, Integer.MAX_VALUE, 128, false, false)); // Level 128 for no jump
           }
 
           // Apply custom potion effects
