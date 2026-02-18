@@ -14,6 +14,8 @@ import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 import java.util.logging.Level;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
@@ -93,18 +95,27 @@ public class InternalWebServer {
       if (!authenticate(exchange)) {
         return;
       }
-      
-      JsonObject json = new JsonObject();
-      json.addProperty("online_players", Bukkit.getOnlinePlayers().size());
-      json.addProperty("max_players", Bukkit.getMaxPlayers());
-      json.addProperty("tps", Bukkit.getTPS()[0]);
-      
-      long freeMemory = Runtime.getRuntime().freeMemory() / 1024 / 1024;
-      long totalMemory = Runtime.getRuntime().totalMemory() / 1024 / 1024;
-      json.addProperty("ram_free", freeMemory);
-      json.addProperty("ram_total", totalMemory);
-      
-      sendResponse(exchange, 200, gson.toJson(json));
+
+      try {
+        Future<JsonObject> future = Bukkit.getScheduler().callSyncMethod(plugin, () -> {
+          JsonObject json = new JsonObject();
+          json.addProperty("online_players", Bukkit.getOnlinePlayers().size());
+          json.addProperty("max_players", Bukkit.getMaxPlayers());
+          json.addProperty("tps", Bukkit.getTPS()[0]);
+          return json;
+        });
+        JsonObject json = future.get(); // This blocks until the main thread runs the code
+
+        long freeMemory = Runtime.getRuntime().freeMemory() / 1024 / 1024;
+        long totalMemory = Runtime.getRuntime().totalMemory() / 1024 / 1024;
+        json.addProperty("ram_free", freeMemory);
+        json.addProperty("ram_total", totalMemory);
+
+        sendResponse(exchange, 200, gson.toJson(json));
+      } catch (InterruptedException | ExecutionException e) {
+        plugin.getLogger().log(Level.SEVERE, "Error getting server status", e);
+        sendResponse(exchange, 500, "{\"error\":\"Internal server error\"}");
+      }
     }
   }
 

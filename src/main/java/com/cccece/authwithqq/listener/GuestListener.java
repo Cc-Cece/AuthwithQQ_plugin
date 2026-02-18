@@ -17,6 +17,8 @@ import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.potion.PotionEffect;
+import org.bukkit.potion.PotionEffectType;
 
 /**
  * Handles guest restrictions for players who have not bound their QQ.
@@ -55,35 +57,29 @@ public class GuestListener implements Listener {
     Player player = event.getPlayer();
     UUID uuid = player.getUniqueId();
     
-    plugin.getDatabaseManager().addGuest(uuid, player.getName());
-    long qq = plugin.getDatabaseManager().getQq(uuid);
-    
-    if (qq == 0) {
-      guestCache.add(uuid);
-      String message = plugin.getConfig().getString("messages.guest-join", "Please bind your QQ")
-          .replace("%code%", uuid.toString());
-      player.sendMessage(serializer.deserialize(message));
-    } else {
-      String welcome = plugin.getConfig().getString("messages.welcome", "&a欢迎回来, %player%!")
-          .replace("%player%", player.getName());
-      player.sendMessage(serializer.deserialize(welcome));
-    }
-  }
+    plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
+      // Database operations (can be blocking)
+      plugin.getDatabaseManager().addGuest(uuid, player.getName());
+      long qq = plugin.getDatabaseManager().getQq(uuid);
 
-  /**
-   * Prevents guests from moving if restricted.
-   *
-   * @param event The PlayerMoveEvent.
-   */
-  @EventHandler
-  public void onMove(PlayerMoveEvent event) {
-    if (isRestricted(event.getPlayer(), "MOVE")) {
-      if (event.getFrom().getX() != event.getTo().getX() 
-          || event.getFrom().getZ() != event.getTo().getZ()) {
-        event.setTo(event.getFrom());
-        sendActionbar(event.getPlayer());
-      }
-    }
+      // Schedule subsequent Bukkit API calls back on the main thread
+      plugin.getServer().getScheduler().runTask(plugin, () -> {
+        if (qq == 0) {
+          guestCache.add(uuid);
+          String message = plugin.getConfig().getString("messages.guest-join", "Please bind your QQ")
+              .replace("%code%", uuid.toString());
+          player.sendMessage(serializer.deserialize(message));
+          
+          // Apply blindness and extreme slowness
+          player.addPotionEffect(new PotionEffect(PotionEffectType.BLINDNESS, Integer.MAX_VALUE, 0, false, false));
+          player.addPotionEffect(new PotionEffect(PotionEffectType.SLOW, Integer.MAX_VALUE, 255, false, false));
+        } else {
+          String welcome = plugin.getConfig().getString("messages.welcome", "&a欢迎回来, %player%!")
+              .replace("%player%", player.getName());
+          player.sendMessage(serializer.deserialize(welcome));
+        }
+      });
+    });
   }
 
   /**
@@ -160,6 +156,8 @@ public class GuestListener implements Listener {
     guestCache.remove(uuid);
     Player player = plugin.getServer().getPlayer(uuid);
     if (player != null) {
+      player.removePotionEffect(PotionEffectType.BLINDNESS);
+      player.removePotionEffect(PotionEffectType.SLOW);
       String success = plugin.getConfig().getString("messages.success", "&aBinding successful!");
       player.sendMessage(serializer.deserialize(success));
       player.showTitle(Title.title(serializer.deserialize(success),
