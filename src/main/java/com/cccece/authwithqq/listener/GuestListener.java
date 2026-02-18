@@ -33,8 +33,8 @@ import org.bukkit.potion.PotionEffectType;
 public class GuestListener implements Listener {
   private final AuthWithQqPlugin plugin;
   private final Set<UUID> guestCache = new HashSet<>();
-  private final Map<UUID, GameMode> originalGameModes = new HashMap<>(); // Store original game modes
-  private final Map<UUID, String> playerVerificationCodes = new HashMap<>(); // Store generated codes
+  private final Map<UUID, GameMode> originalGameModes = new HashMap<>();
+  private final Map<UUID, String> playerVerificationCodes = new HashMap<>();
   private final LegacyComponentSerializer serializer = LegacyComponentSerializer.legacyAmpersand();
 
   /**
@@ -96,8 +96,9 @@ public class GuestListener implements Listener {
           if (!allowMove) {
             player.addPotionEffect(new PotionEffect(
                 PotionEffectType.SLOWNESS, Integer.MAX_VALUE, 255, false, false));
-            player.addPotionEffect(new PotionEffect(
-                PotionEffectType.JUMP_BOOST, Integer.MAX_VALUE, 128, false, false)); // Level 128 for no jump
+            player.addPotionEffect(
+                new PotionEffect(PotionEffectType.JUMP_BOOST, Integer.MAX_VALUE,
+                    128, false, false));
           }
 
           // Apply custom potion effects
@@ -108,26 +109,29 @@ public class GuestListener implements Listener {
               int level = (Integer) effectMap.get("level");
               PotionEffectType effectType = PotionEffectType.getByName(typeName);
               if (effectType != null) {
-                player.addPotionEffect(new PotionEffect(effectType, Integer.MAX_VALUE, level, false, false));
+                player.addPotionEffect(new PotionEffect(effectType, Integer.MAX_VALUE, level,
+                    false, false));
               } else {
                 plugin.getLogger().warning("Invalid potion effect type configured: " + typeName);
               }
             } catch (Exception e) {
-              plugin.getLogger().warning("Error parsing custom potion effect: " + effectMap.toString()
-                + " - " + e.getMessage());
+              plugin.getLogger().warning("Error parsing custom potion effect: "
+                  + effectMap.toString() + " - " + e.getMessage());
             }
           }
 
           // Generate and store verification code
           String verificationCode = plugin.generateCode();
           playerVerificationCodes.put(uuid, verificationCode);
-          String message = plugin.getConfig().getString("messages.guest-join", "Please bind your QQ")
+          String message = plugin.getConfig()
+              .getString("messages.guest-join", "Please bind your QQ")
               .replace("%code%", verificationCode);
           player.sendMessage(serializer.deserialize(message));
         } else {
           // Player is bound, clear any existing guest status
           unmarkGuest(uuid); // Ensure any lingering effects are removed
-          String welcome = plugin.getConfig().getString("messages.welcome", "&a欢迎回来, %player%!")
+          String welcome = plugin.getConfig()
+              .getString("messages.welcome", "&a欢迎回来, %player%!")
               .replace("%player%", player.getName());
           player.sendMessage(serializer.deserialize(welcome));
         }
@@ -222,14 +226,15 @@ public class GuestListener implements Listener {
    * @param event The PlayerTeleportEvent.
    */
   @EventHandler(priority = EventPriority.LOW)
-      public void onPlayerTeleport(PlayerTeleportEvent event) {
-        if (guestCache.contains(event.getPlayer().getUniqueId())
-            && !plugin.getConfig().getBoolean("guest-mode.allow-world-change", true)) {
-              if (event.getFrom().getWorld() != null
-                  && event.getTo().getWorld() != null
-                  && !event.getFrom().getWorld().equals(event.getTo().getWorld())) {
+  public void onPlayerTeleport(PlayerTeleportEvent event) {
+    if (guestCache.contains(event.getPlayer().getUniqueId())
+        && !plugin.getConfig().getBoolean("guest-mode.allow-world-change", true)) {
+      if (event.getFrom().getWorld() != null
+          && event.getTo().getWorld() != null
+          && !event.getFrom().getWorld().equals(event.getTo().getWorld())) {
         event.setCancelled(true);
-        String deniedMessage = plugin.getConfig().getString("messages.world-change-denied", "&c未验证无法离开当前世界！");
+        String deniedMessage = plugin.getConfig()
+            .getString("messages.world-change-denied", "&c未验证无法离开当前世界！");
         event.getPlayer().sendMessage(serializer.deserialize(deniedMessage));
       }
     }
@@ -248,7 +253,8 @@ public class GuestListener implements Listener {
           && event.getTo().getWorld() != null
           && !event.getFrom().getWorld().equals(event.getTo().getWorld())) {
         event.setCancelled(true);
-        String deniedMessage = plugin.getConfig().getString("messages.world-change-denied", "&c未验证无法离开当前世界！");
+        String deniedMessage = plugin.getConfig()
+            .getString("messages.world-change-denied", "&c未验证无法离开当前世界！");
         event.getPlayer().sendMessage(serializer.deserialize(deniedMessage));
       }
     }
@@ -281,7 +287,8 @@ public class GuestListener implements Listener {
   }
 
   private void sendActionbar(Player player) {
-    String prompt = plugin.getConfig().getString("messages.bind-prompt", "&6请输入 /绑定 <验证码> 以完成绑定。");
+    String prompt = plugin.getConfig()
+        .getString("messages.bind-prompt", "&6请输入 /绑定 <验证码> 以完成绑定。");
     player.sendActionBar(serializer.deserialize(prompt));
   }
 
@@ -308,13 +315,20 @@ public class GuestListener implements Listener {
         player.setGameMode(GameMode.SURVIVAL);
       }
       
-      String success = plugin.getConfig().getString("messages.success", "&aBinding successful!");
+      String success = plugin.getConfig()
+          .getString("messages.success", "&aBinding successful!");
       player.sendMessage(serializer.deserialize(success));
-      player.showTitle(Title.title(serializer.deserialize(success),
-          net.kyori.adventure.text.Component.empty()));
+      player.showTitle(
+          Title.title(serializer.deserialize(success), net.kyori.adventure.text.Component.empty()));
     }
   }
 
+  /**
+   * Retrieves the verification code for a given player UUID.
+   *
+   * @param uuid The UUID of the player.
+   * @return The verification code, or null if not found.
+   */
   public String getVerificationCode(UUID uuid) {
     return playerVerificationCodes.get(uuid);
   }

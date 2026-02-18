@@ -7,9 +7,9 @@ import com.cccece.authwithqq.web.InternalWebServer;
 import java.io.File;
 import java.util.HashMap;
 import java.util.Map;
+import java.security.SecureRandom;
 import java.util.Objects;
 import java.util.UUID;
-import java.util.Random;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -21,7 +21,7 @@ public class AuthWithQqPlugin extends JavaPlugin {
   private InternalWebServer webServer;
   private GuestListener guestListener;
   private CsvManager csvManager;
-  private final Random random = new Random();
+  private final SecureRandom random = new SecureRandom();
 
   @Override
   public void onEnable() {

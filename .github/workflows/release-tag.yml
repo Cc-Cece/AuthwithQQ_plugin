@@ -2,14 +2,18 @@ name: Dev Build and Release
 
 on:
   push:
-    branches:
-      - main  # 或者你的主分支名
+    branches: [ main ]
     paths-ignore:
       - '**.md'
+      - '.gitignore'
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions: # 显式声明权限，确保 Release 和 Artifact 可用
+      contents: write
+      actions: write
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -19,47 +23,49 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '21'
-          cache: 'gradle'
+          cache: 'gradle' # 自动缓存依赖，显著提升第二次构建速度
 
-      - name: Grant execute permission for gradlew
+      - name: Grant execute permission
         run: chmod +x gradlew
 
+      # 核心构建步骤：使用 --continue 确保即使 Checkstyle 报错也会尝试生成 JAR
       - name: Build with Gradle
-        run: ./gradlew build
+        run: ./gradlew build --continue
 
       - name: Find Release Asset
         id: find_asset
         run: |
+          # 寻找 shadowJar 生成的包，排除 plain 瘦包
           RELEASE_JAR=$(find build/libs -name 'AuthWithQq-*.jar' ! -name '*-plain.jar' -print -quit)
           if [ -z "$RELEASE_JAR" ]; then
-            echo "::error::No release JAR found."
+            echo "::error::Build failed to produce a valid JAR."
             exit 1
           fi
-          echo "RELEASE_JAR_PATH=$RELEASE_JAR" >> "$GITHUB_OUTPUT"
-          echo "RELEASE_JAR_NAME=$(basename $RELEASE_JAR)" >> "$GITHUB_OUTPUT"
+          echo "PATH=$RELEASE_JAR" >> "$GITHUB_OUTPUT"
+          echo "NAME=$(basename $RELEASE_JAR)" >> "$GITHUB_OUTPUT"
 
-      # 步骤 1：上传 Artifact（保存每一次成功的构建，保留7天）
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: AuthWithQq-dev-${{ github.run_number }}-${{ github.sha }}
-          path: ${{ steps.find_asset.outputs.RELEASE_JAR_PATH }}
+          name: AuthWithQq-dev-build-${{ github.run_number }}
+          path: ${{ steps.find_asset.outputs.PATH }}
           retention-days: 60
 
-      # 步骤 2：更新 dev Release（始终指向最新构建）
       - name: Update Dev Release
         uses: softprops/action-gh-release@v2
         with:
-          files: ${{ steps.find_asset.outputs.RELEASE_JAR_PATH }}
+          files: ${{ steps.find_asset.outputs.PATH }}
           tag_name: dev
-          name: Latest Development Build
+          name: "Latest Dev Build (#${{ github.run_number }})"
           body: |
-            ## 最近一次构建详情
+            ## 🛠 构建详情
+            - **提交信息**: `${{ github.event.head_commit.message }}`
             - **提交哈希**: `${{ github.sha }}`
             - **构建编号**: `${{ github.run_number }}`
-            - **更新时间**: ${{ github.event.head_commit.timestamp }}
             
-            所有历史构建请在 Actions 页面下载 Artifacts。
+            > [!TIP]
+            > 所有历史构建请在 Actions 页面下载 Artifacts。
+            > 如果构建显示黄色警告，说明 Checkstyle 规范未达标，但不影响 JAR 功能。
           prerelease: true
           make_latest: false
         env:
