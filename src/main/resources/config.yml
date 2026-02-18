@@ -1,1 +1,20 @@
-# A journey of 1,000 lines starts with a single char
+server:
+  port: 8081
+  token: "changeme"
+
+guest-mode:
+  restrictions:
+    - MOVE
+    - CHAT
+    - INTERACT
+    - COMMAND
+  allowed-commands:
+    - "/login"
+    - "/register"
+    - "/bind"
+
+messages:
+  guest-join: "&c请加入QQ群 123456 发送 /绑定 %code% 进行验证"
+  success: "&a验证成功，祝你游戏愉快！"
+  already-bound: "&e你已经绑定过了！"
+  bind-prompt: "&6请输入 /绑定 <验证码> 以完成绑定。"

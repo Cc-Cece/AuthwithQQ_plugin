@@ -10,6 +10,13 @@ commands:
     description: Admin command for AuthWithQq
     permission: authwithqq.admin
     usage: /auth <csv|reload>
+  bind:
+    description: Bind your QQ account
+    usage: /bind
+  绑定:
+    description: 绑定你的 QQ 账号
+    usage: /绑定
+
 permissions:
   authwithqq.admin:
     description: Allows administrative access to AuthWithQq
