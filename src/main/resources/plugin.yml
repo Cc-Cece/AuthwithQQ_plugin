@@ -1,0 +1,16 @@
+name: AuthWithQq
+version: '${VERSION}'
+main: com.cccece.authwithqq.AuthWithQqPlugin
+api-version: '1.20'
+prefix: AuthWithQq
+authors: [CCCECE]
+description: All-in-One QQ authentication system for Paper.
+commands:
+  auth:
+    description: Admin command for AuthWithQq
+    permission: authwithqq.admin
+    usage: /auth <csv|reload>
+permissions:
+  authwithqq.admin:
+    description: Allows administrative access to AuthWithQq
+    default: op
