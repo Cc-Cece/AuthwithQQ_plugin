@@ -9,6 +9,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.Random;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -20,6 +21,7 @@ public class AuthWithQqPlugin extends JavaPlugin {
   private InternalWebServer webServer;
   private GuestListener guestListener;
   private CsvManager csvManager;
+  private final Random random = new Random();
 
   @Override
   public void onEnable() {
@@ -128,5 +130,23 @@ public class AuthWithQqPlugin extends JavaPlugin {
       }
     }
     return result;
+  }
+
+  /**
+   * Generates a random numeric code for binding.
+   *
+   * @return A numeric string code.
+   */
+  public String generateCode() {
+    int length = getConfig().getInt("binding.code-length", 6);
+    if (length < 4 || length > 8) {
+      getLogger().warning("Invalid code-length configured. Defaulting to 6.");
+      length = 6;
+    }
+    StringBuilder code = new StringBuilder();
+    for (int i = 0; i < length; i++) {
+      code.append(random.nextInt(10)); // 0-9
+    }
+    return code.toString();
   }
 }

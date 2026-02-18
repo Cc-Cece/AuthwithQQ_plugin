@@ -1,13 +1,18 @@
+binding:
+  code-length: 6 # 整数，默认 6。支持生成 4-8 位的数字验证码。
+
 server:
   port: 8081
   token: "changeme"
 
 guest-mode:
-  restrictions:
-    - MOVE
-    - CHAT
-    - INTERACT
-    - COMMAND
+  allow-move: true # 布尔值，默认 true。如果为 false，则给予玩家 SLOW (等级 255) 和 JUMP (等级 128) 药水效果以禁止移动和跳跃。
+  allow-interact: false # 布尔值，默认 false。如果为 false，则监听并取消 PlayerInteractEvent (物理交互), EntityDamageByEntityEvent (攻击), PlayerDropItemEvent (丢弃), EntityPickupItemEvent (拾取)。
+  allow-world-change: false # 布尔值，默认 false。如果为 false，则监听 PlayerTeleportEvent 和 PlayerPortalEvent。如果 event.getTo().getWorld() 与 event.getFrom().getWorld() 不同，则取消传送。
+  gamemode: "SURVIVAL" # 字符串，默认 "SURVIVAL"。玩家进入游客模式时，强制设置为该游戏模式（如 ADVENTURE 或 SPECTATOR）。
+  potion-effects: # 列表。额外的负面效果配置（如 BLINDNESS）。支持配置效果类型和等级。
+    - type: BLINDNESS
+      level: 0 # (0-255)
   allowed-commands:
     - "/login"
     - "/register"
@@ -18,3 +23,4 @@ messages:
   success: "&a验证成功，祝你游戏愉快！"
   already-bound: "&e你已经绑定过了！"
   bind-prompt: "&6请输入 /绑定 <验证码> 以完成绑定。"
+  world-change-denied: "&c未验证无法离开当前世界！" # New message

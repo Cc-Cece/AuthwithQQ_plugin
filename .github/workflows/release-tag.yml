@@ -1,0 +1,51 @@
+name: Release Tag
+
+on:
+  push:
+    tags:
+      - 'v*' # Trigger on tags like v1.0, v1.0.1, etc.
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+          cache: 'gradle'
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build with Gradle
+        run: ./gradlew build
+
+      - name: Find and Upload Release Asset
+        id: upload_asset
+        run: |
+          RELEASE_JAR=$(find build/libs -name 'AuthWithQq-*.jar' ! -name '*-plain.jar' -print -quit)
+          if [ -z "$RELEASE_JAR" ]; then
+            echo "::error::No release JAR found. Ensure build/libs contains the ShadowJar and excludes *-plain.jar."
+            exit 1
+          fi
+          echo "RELEASE_JAR_PATH=$RELEASE_JAR" >> "$GITHUB_OUTPUT"
+          echo "RELEASE_JAR_NAME=$(basename $RELEASE_JAR)" >> "$GITHUB_OUTPUT"
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: ${{ steps.upload_asset.outputs.RELEASE_JAR_PATH }}
+          name: Release ${{ github.ref_name }}
+          body: |
+            ## Release Notes for ${{ github.ref_name }}
+
+            This release includes the latest build of the AuthWithQq plugin.
+          prerelease: ${{ contains(github.ref_name, '-beta') || contains(github.ref_name, '-rc') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
