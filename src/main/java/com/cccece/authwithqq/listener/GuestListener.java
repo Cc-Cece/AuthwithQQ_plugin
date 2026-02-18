@@ -1,7 +1,6 @@
 package com.cccece.authwithqq.listener;
 
 import com.cccece.authwithqq.AuthWithQqPlugin;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -27,7 +26,6 @@ import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
-import org.bukkit.configuration.ConfigurationSection;
 
 /**
  * Handles guest restrictions for players who have not bound their QQ.
@@ -88,15 +86,18 @@ public class GuestListener implements Listener {
             GameMode gm = GameMode.valueOf(configuredGameMode);
             player.setGameMode(gm);
           } catch (IllegalArgumentException e) {
-            plugin.getLogger().warning("Invalid game mode configured: " + configuredGameMode + ". Defaulting to SURVIVAL for " + player.getName());
+            plugin.getLogger().warning("Invalid game mode configured: " + configuredGameMode
+                + ". Defaulting to SURVIVAL for " + player.getName());
             player.setGameMode(GameMode.SURVIVAL);
           }
 
           // Apply allow-move potion effects
           boolean allowMove = plugin.getConfig().getBoolean("guest-mode.allow-move", true);
           if (!allowMove) {
-            player.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, Integer.MAX_VALUE, 255, false, false));
-            player.addPotionEffect(new PotionEffect(PotionEffectType.JUMP_BOOST, Integer.MAX_VALUE, 128, false, false)); // Level 128 for no jump
+            player.addPotionEffect(new PotionEffect(
+                PotionEffectType.SLOWNESS, Integer.MAX_VALUE, 255, false, false));
+            player.addPotionEffect(new PotionEffect(
+                PotionEffectType.JUMP_BOOST, Integer.MAX_VALUE, 128, false, false)); // Level 128 for no jump
           }
 
           // Apply custom potion effects
@@ -112,7 +113,8 @@ public class GuestListener implements Listener {
                 plugin.getLogger().warning("Invalid potion effect type configured: " + typeName);
               }
             } catch (Exception e) {
-              plugin.getLogger().warning("Error parsing custom potion effect: " + effectMap.toString() + " - " + e.getMessage());
+              plugin.getLogger().warning("Error parsing custom potion effect: " + effectMap.toString()
+                + " - " + e.getMessage());
             }
           }
 
@@ -134,68 +136,98 @@ public class GuestListener implements Listener {
   }
 
   /**
-   * Prevents guests from chatting if restricted.
+   * Prevents guests from chatting if they are in the guest cache.
    *
    * @param event The AsyncPlayerChatEvent.
    */
   @EventHandler
   public void onChat(AsyncPlayerChatEvent event) {
     if (guestCache.contains(event.getPlayer().getUniqueId())) {
-      // Assuming allowed-commands config is handled by the command listener
-      // If CHAT restriction is needed based on config, add it here.
-      // For now, if they are a guest, all chat is disallowed unless explicitly allowed.
-      // This is implicit from original setup, will rely on command listener for allowed commands.
+      event.setCancelled(true);
+      sendActionbar(event.getPlayer());
     }
   }
 
   /**
    * Handles interaction restrictions for guests.
-   * PlayerInteractEvent (physical interaction), EntityDamageByEntityEvent (attack),
-   * PlayerDropItemEvent (drop), EntityPickupItemEvent (pickup).
+   * PlayerInteractEvent (physical interaction).
+   *
+   * @param event The PlayerInteractEvent.
    */
   @EventHandler(priority = EventPriority.LOW)
   public void onInteract(PlayerInteractEvent event) {
-    if (guestCache.contains(event.getPlayer().getUniqueId()) && !plugin.getConfig().getBoolean("guest-mode.allow-interact", true)) {
+    if (guestCache.contains(event.getPlayer().getUniqueId())
+        && !plugin.getConfig().getBoolean("guest-mode.allow-interact", true)) {
       event.setCancelled(true);
       sendActionbar(event.getPlayer());
     }
   }
 
+  /**
+   * Handles attack restrictions for guests.
+   * EntityDamageByEntityEvent (attack).
+   *
+   * @param event The EntityDamageByEntityEvent.
+   */
   @EventHandler(priority = EventPriority.LOW)
   public void onEntityDamageByEntity(EntityDamageByEntityEvent event) {
-    if (event.getDamager() instanceof Player && guestCache.contains(event.getDamager().getUniqueId()) && !plugin.getConfig().getBoolean("guest-mode.allow-interact", true)) {
+    if (event.getDamager() instanceof Player
+        && guestCache.contains(event.getDamager().getUniqueId())
+        && !plugin.getConfig().getBoolean("guest-mode.allow-interact", true)) {
       event.setCancelled(true);
       sendActionbar((Player) event.getDamager());
     }
-    if (event.getEntity() instanceof Player && guestCache.contains(event.getEntity().getUniqueId()) && !plugin.getConfig().getBoolean("guest-mode.allow-interact", true)) {
+    if (event.getEntity() instanceof Player
+        && guestCache.contains(event.getEntity().getUniqueId())
+        && !plugin.getConfig().getBoolean("guest-mode.allow-interact", true)) {
       event.setCancelled(true);
       // No actionbar for being attacked, only for attacking
     }
   }
 
+  /**
+   * Handles item drop restrictions for guests.
+   * PlayerDropItemEvent.
+   *
+   * @param event The PlayerDropItemEvent.
+   */
   @EventHandler(priority = EventPriority.LOW)
   public void onPlayerDropItem(PlayerDropItemEvent event) {
-    if (guestCache.contains(event.getPlayer().getUniqueId()) && !plugin.getConfig().getBoolean("guest-mode.allow-interact", true)) {
+    if (guestCache.contains(event.getPlayer().getUniqueId())
+        && !plugin.getConfig().getBoolean("guest-mode.allow-interact", true)) {
       event.setCancelled(true);
       sendActionbar(event.getPlayer());
     }
   }
 
+  /**
+   * Handles item pickup restrictions for guests.
+   * EntityPickupItemEvent.
+   *
+   * @param event The EntityPickupItemEvent.
+   */
   @EventHandler(priority = EventPriority.LOW)
   public void onEntityPickupItem(EntityPickupItemEvent event) {
-    if (event.getEntity() instanceof Player && guestCache.contains(event.getEntity().getUniqueId()) && !plugin.getConfig().getBoolean("guest-mode.allow-interact", true)) {
+    if (event.getEntity() instanceof Player
+        && guestCache.contains(event.getEntity().getUniqueId())
+        && !plugin.getConfig().getBoolean("guest-mode.allow-interact", true)) {
       event.setCancelled(true);
       sendActionbar((Player) event.getEntity());
     }
   }
 
   /**
-   * Handles world change restrictions for guests.
+   * Handles world change restrictions for guests via PlayerTeleportEvent.
+   *
+   * @param event The PlayerTeleportEvent.
    */
   @EventHandler(priority = EventPriority.LOW)
-  public void onPlayerTeleport(PlayerTeleportEvent event) {
-    if (guestCache.contains(event.getPlayer().getUniqueId()) && !plugin.getConfig().getBoolean("guest-mode.allow-world-change", true)) {
-      if (event.getFrom().getWorld() != null && event.getTo().getWorld() != null && !event.getFrom().getWorld().equals(event.getTo().getWorld())) {
+      public void onPlayerTeleport(PlayerTeleportEvent event) {
+        if (guestCache.contains(event.getPlayer().getUniqueId())
+            && !plugin.getConfig().getBoolean("guest-mode.allow-world-change", true)) {
+              if (event.getFrom().getWorld() != null
+                  && event.getTo().getWorld() != null
+                  && !event.getFrom().getWorld().equals(event.getTo().getWorld())) {
         event.setCancelled(true);
         String deniedMessage = plugin.getConfig().getString("messages.world-change-denied", "&c未验证无法离开当前世界！");
         event.getPlayer().sendMessage(serializer.deserialize(deniedMessage));
@@ -203,10 +235,18 @@ public class GuestListener implements Listener {
     }
   }
 
+  /**
+   * Handles world change restrictions for guests via PlayerPortalEvent.
+   *
+   * @param event The PlayerPortalEvent.
+   */
   @EventHandler(priority = EventPriority.LOW)
   public void onPlayerPortal(PlayerPortalEvent event) {
-    if (guestCache.contains(event.getPlayer().getUniqueId()) && !plugin.getConfig().getBoolean("guest-mode.allow-world-change", true)) {
-      if (event.getFrom().getWorld() != null && event.getTo().getWorld() != null && !event.getFrom().getWorld().equals(event.getTo().getWorld())) {
+    if (guestCache.contains(event.getPlayer().getUniqueId())
+        && !plugin.getConfig().getBoolean("guest-mode.allow-world-change", true)) {
+      if (event.getFrom().getWorld() != null
+          && event.getTo().getWorld() != null
+          && !event.getFrom().getWorld().equals(event.getTo().getWorld())) {
         event.setCancelled(true);
         String deniedMessage = plugin.getConfig().getString("messages.world-change-denied", "&c未验证无法离开当前世界！");
         event.getPlayer().sendMessage(serializer.deserialize(deniedMessage));
