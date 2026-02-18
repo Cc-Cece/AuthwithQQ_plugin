@@ -1,9 +1,11 @@
-name: Release Tag
+name: Dev Build and Release
 
 on:
   push:
-    tags:
-      - 'v*' # Trigger on tags like v1.0, v1.0.1, etc.
+    branches:
+      - main  # 或者你的主分支名
+    paths-ignore:
+      - '**.md'
 
 jobs:
   build:
@@ -25,27 +27,40 @@ jobs:
       - name: Build with Gradle
         run: ./gradlew build
 
-      - name: Find and Upload Release Asset
-        id: upload_asset
+      - name: Find Release Asset
+        id: find_asset
         run: |
           RELEASE_JAR=$(find build/libs -name 'AuthWithQq-*.jar' ! -name '*-plain.jar' -print -quit)
           if [ -z "$RELEASE_JAR" ]; then
-            echo "::error::No release JAR found. Ensure build/libs contains the ShadowJar and excludes *-plain.jar."
+            echo "::error::No release JAR found."
             exit 1
           fi
           echo "RELEASE_JAR_PATH=$RELEASE_JAR" >> "$GITHUB_OUTPUT"
           echo "RELEASE_JAR_NAME=$(basename $RELEASE_JAR)" >> "$GITHUB_OUTPUT"
 
-      - name: Create Release
-        uses: softprops/action-gh-release@v2
-        if: startsWith(github.ref, 'refs/tags/')
+      # 步骤 1：上传 Artifact（保存每一次成功的构建，保留7天）
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
         with:
-          files: ${{ steps.upload_asset.outputs.RELEASE_JAR_PATH }}
-          name: Release ${{ github.ref_name }}
-          body: |
-            ## Release Notes for ${{ github.ref_name }}
+          name: AuthWithQq-dev-${{ github.run_number }}-${{ github.sha }}
+          path: ${{ steps.find_asset.outputs.RELEASE_JAR_PATH }}
+          retention-days: 60
 
-            This release includes the latest build of the AuthWithQq plugin.
-          prerelease: ${{ contains(github.ref_name, '-beta') || contains(github.ref_name, '-rc') }}
+      # 步骤 2：更新 dev Release（始终指向最新构建）
+      - name: Update Dev Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.find_asset.outputs.RELEASE_JAR_PATH }}
+          tag_name: dev
+          name: Latest Development Build
+          body: |
+            ## 最近一次构建详情
+            - **提交哈希**: `${{ github.sha }}`
+            - **构建编号**: `${{ github.run_number }}`
+            - **更新时间**: ${{ github.event.head_commit.timestamp }}
+            
+            所有历史构建请在 Actions 页面下载 Artifacts。
+          prerelease: true
+          make_latest: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
