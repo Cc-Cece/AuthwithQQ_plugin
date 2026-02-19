@@ -872,19 +872,48 @@ public class InternalWebServer {
                   }
                   break;
       
-                case "name":
-                  // This can also be a QQ, the DB method handles it
-                  Future<UUID> futureUuid = Bukkit.getScheduler().callSyncMethod(plugin,
-                      () -> plugin.getDatabaseManager().findUuidByNameOrQq(value));
-                  UUID uuidByName = futureUuid.get();
-                  if (uuidByName != null) {
-                    data.addProperty("uuid", uuidByName.toString());
-                    found = true;
-                  }
-                  break;
-      
-                default:
-                  sendResponse(exchange, 400, "{\"success\":false, \"error\":\"Invalid 'by' parameter\"}");
+                          case "name":
+                            // This can also be a QQ, the DB method handles it
+                            Future<UUID> futureUuid = Bukkit.getScheduler().callSyncMethod(plugin,
+                                () -> plugin.getDatabaseManager().findUuidByNameOrQq(value));
+                            UUID uuidByName = futureUuid.get();
+                            if (uuidByName != null) {
+                              data.addProperty("uuid", uuidByName.toString());
+                              found = true;
+                            }
+                            break;
+                
+                                    case "bots":
+                                      Future<UUID> futureOwnerUuid = Bukkit.getScheduler().callSyncMethod(plugin,
+                                          () -> plugin.getDatabaseManager().findUuidByNameOrQq(value));
+                                      UUID ownerUuid = futureOwnerUuid.get();
+                                      if (ownerUuid != null) {
+                                        String ownerUuidStr = ownerUuid.toString();
+                                        List<Map<String, String>> allPlayersData = plugin.getDatabaseManager().getAllPlayersData();
+                                        JsonArray botsArray = new JsonArray();
+                                        int count = 0;
+                          
+                                        for (Map<String, String> playerData : allPlayersData) {
+                                          // Correct keys based on observed /api/players output
+                                          if ("true".equals(playerData.get("bot.is_bot")) && ownerUuidStr.equals(playerData.get("bot.owner_uuid"))) {
+                                            JsonObject botObj = new JsonObject();
+                                            botObj.addProperty("name", playerData.get("Name"));
+                                            botObj.addProperty("uuid", playerData.get("UUID"));
+                                            botsArray.add(botObj);
+                                            count++;
+                                          }
+                                        }
+                          
+                                        JsonObject response = new JsonObject();
+                                        response.addProperty("success", true);
+                                        response.addProperty("owner_uuid", ownerUuidStr);
+                                        response.addProperty("count", count);
+                                        response.add("bots", botsArray);
+                                        sendResponse(exchange, 200, gson.toJson(response));
+                                        return; // Already sent response for this case
+                                      }
+                                      break;                
+                          default:                  sendResponse(exchange, 400, "{\"success\":false, \"error\":\"Invalid 'by' parameter\"}");
                   return;
               }
       
