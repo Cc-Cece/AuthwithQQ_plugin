@@ -1,6 +1,7 @@
 package com.cccece.authwithqq.listener;
 
 import com.cccece.authwithqq.AuthWithQqPlugin;
+import com.cccece.authwithqq.util.MessageManager;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -155,17 +156,11 @@ public class GuestListener implements Listener {
           // Generate and store verification code with expiration logic
           String verificationCode = plugin.getOrCreateCode(uuid); // Use centralized manager
 
-          String message = plugin.getConfig()
-              .getString("messages.guest-join", "Please bind your QQ")
-              .replace("%code%", verificationCode);
-          player.sendMessage(serializer.deserialize(message));
+          player.sendMessage(plugin.getMessageManager().getMessage("messages.guest.join-prompt", Map.of("%code%", verificationCode)));
         } else {
           // Player is bound, clear any existing guest status
           unmarkGuest(uuid); // Ensure any lingering effects are removed
-          String welcome = plugin.getConfig()
-              .getString("messages.welcome", "&a欢迎回来, %player%!")
-              .replace("%player%", player.getName());
-          player.sendMessage(serializer.deserialize(welcome));
+          player.sendMessage(plugin.getMessageManager().getMessage("messages.guest.welcome", Map.of("%player%", player.getName())));
         }
       });
     });
@@ -265,10 +260,7 @@ public class GuestListener implements Listener {
           && event.getTo().getWorld() != null
           && !event.getFrom().getWorld().equals(event.getTo().getWorld())) {
         event.setCancelled(true);
-        String deniedMessage = Objects.requireNonNullElse(plugin.getConfig()
-            .getString("messages.world-change-denied", "&c未验证无法离开当前世界！"),
-            "&c未验证无法离开当前世界！");
-        event.getPlayer().sendMessage(serializer.deserialize(deniedMessage));
+        event.getPlayer().sendMessage(plugin.getMessageManager().getMessage("messages.guest.world-change-denied"));
       }
     }
   }
@@ -286,10 +278,7 @@ public class GuestListener implements Listener {
           && event.getTo().getWorld() != null
           && !event.getFrom().getWorld().equals(event.getTo().getWorld())) {
         event.setCancelled(true);
-        String deniedMessage = Objects.requireNonNullElse(plugin.getConfig()
-            .getString("messages.world-change-denied", "&c未验证无法离开当前世界！"),
-            "&c未验证无法离开当前世界！");
-        event.getPlayer().sendMessage(serializer.deserialize(deniedMessage));
+        event.getPlayer().sendMessage(plugin.getMessageManager().getMessage("messages.guest.world-change-denied"));
       }
     }
   }
@@ -321,10 +310,7 @@ public class GuestListener implements Listener {
   }
 
   private void sendActionbar(Player player) {
-    String prompt = Objects.requireNonNullElse(plugin.getConfig()
-        .getString("messages.bind-prompt", "&6请输入 /绑定 <验证码> 以完成绑定。"),
-        "&6请输入 /绑定 <验证码> 以完成绑定。");
-    player.sendActionBar(serializer.deserialize(prompt));
+    player.sendActionBar(plugin.getMessageManager().getMessage("messages.guest.actionbar-prompt"));
   }
 
   /**
@@ -350,11 +336,10 @@ public class GuestListener implements Listener {
         player.setGameMode(GameMode.SURVIVAL);
       }
       
-            String success = Objects.requireNonNullElse(plugin.getConfig().getString("messages.success",
-                "&aBinding successful!"), "&aBinding successful!");
-      player.sendMessage(serializer.deserialize(success));
+            Component successComponent = plugin.getMessageManager().getMessage("messages.guest.binding-successful");
+      player.sendMessage(successComponent);
       player.showTitle(
-          Title.title(serializer.deserialize(success), net.kyori.adventure.text.Component.empty()));
+          Title.title(successComponent, net.kyori.adventure.text.Component.empty()));
     }
   }
 

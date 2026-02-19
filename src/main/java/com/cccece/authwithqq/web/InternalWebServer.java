@@ -105,10 +105,6 @@ public class InternalWebServer {
   private class StatusHandler implements HttpHandler {
     @Override
     public void handle(HttpExchange exchange) throws IOException {
-      if (!authenticate(exchange)) {
-        return;
-      }
-
       try {
         Future<JsonObject> future = Bukkit.getScheduler().callSyncMethod(plugin, () -> {
           JsonObject json = new JsonObject();
@@ -446,9 +442,6 @@ public class InternalWebServer {
   private class BotBindHandler implements HttpHandler {
     @Override
     public void handle(HttpExchange exchange) throws IOException {
-      if (!authenticate(exchange)) {
-        return;
-      }
       if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
         sendResponse(exchange, 405, "Method not allowed");
         return;

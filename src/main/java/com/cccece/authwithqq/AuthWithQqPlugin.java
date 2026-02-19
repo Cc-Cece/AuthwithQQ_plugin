@@ -22,12 +22,16 @@ public class AuthWithQqPlugin extends JavaPlugin {
   private InternalWebServer webServer;
   private GuestListener guestListener;
   private CsvManager csvManager;
+  private MessageManager messageManager; // Add this line
   private final SecureRandom random = new SecureRandom();
 
   @Override
   public void onEnable() {
     // Save default config
     saveDefaultConfig();
+
+    // Initialize MessageManager
+    messageManager = new MessageManager(this); // Add this line
 
     // Initialize Database
     File dataFolder = getDataFolder();
@@ -101,6 +105,15 @@ public class AuthWithQqPlugin extends JavaPlugin {
    */
   public CsvManager getCsvManager() {
     return csvManager;
+  }
+
+  /**
+   * Gets the MessageManager instance.
+   *
+   * @return The MessageManager.
+   */
+  public com.cccece.authwithqq.util.MessageManager getMessageManager() {
+    return messageManager;
   }
 
   /**

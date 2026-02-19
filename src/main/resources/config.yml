@@ -34,3 +34,59 @@ guest-mode:
     - "/register"
     - "/bind"
   allow-fake-players: false # 布尔值，默认 false。如果为 true，则假人（NPC）将自动跳过验证。
+
+messages:
+  # AuthCommand Messages
+  auth:
+    no-permission: "&c你没有权限执行此命令。"
+    reload-success: "&a配置已重载。"
+    command-usage:
+      csv: "&c用法: /auth csv <export|import>"
+      whitelist: "&c用法: /auth whitelist <add|remove> <player>"
+      bind: "&c用法: /auth bind <player> <qq>"
+      bot-add: "&c用法: /auth bot add <owner_name> <bot_name>"
+    csv:
+      export-success: "&a数据已导出到 %file%。"
+      export-fail: "&c导出失败: %error%"
+      import-file-not-found: "&c文件 import.csv 未在插件文件夹中找到！"
+      import-success: "&a数据已从 %file% 导入。"
+      import-fail: "&c导入失败: %error%"
+    whitelist:
+      add-success: "&a玩家 %player% 已添加到白名单。"
+      already-whitelisted: "&e玩家 %player% 已经在白名单中。"
+      remove-success: "&a玩家 %player% 已从白名单移除。"
+      not-whitelisted: "&e玩家 %player% 不在白名单中。"
+    bind:
+      player-not-found: "&c找不到玩家 %player%."
+      invalid-qq: "&c无效的QQ号码: %qq%."
+      force-bind-success: "&a已强制绑定玩家 %player% (%uuid%) 到 QQ %qq%."
+    bot:
+      owner-not-found: "&c找不到所有者玩家 %owner%."
+      owner-qq-not-bound: "&c所有者 %owner% 未绑定QQ，无法绑定假人。"
+      bot-limit-reached: "&c所有者 %owner% 已达到假人绑定上限 (%limit%)。"
+      add-success: "&a已绑定假人 %bot_name% (%bot_uuid%) 到所有者 %owner_name% (%owner_uuid%)。"
+    help:
+      header: "&6--- AuthWithQq Admin Commands ---"
+      reload: "&b/auth reload - 重载插件配置。"
+      csv: "&b/auth csv <export|import> - 导出/导入玩家数据。"
+      whitelist: "&b/auth whitelist <add|remove> <player> - 管理白名单玩家。"
+      bind: "&b/auth bind <player> <qq> - 强制绑定玩家QQ。"
+      bot-add: "&b/auth bot add <owner> <bot_name> - 绑定假人到玩家。"
+
+  # BindCommand Messages
+  bind-command:
+    player-only: "&cThis command is for players only."
+    usage: "&c用法: /bind <验证码> <QQ号码>"
+    invalid-qq: "&c无效的QQ号码: %qq%."
+    already-bound-to-this-qq: "&e你已经绑定到此QQ号码了。"
+    already-bound-to-other-qq: "&c你已经绑定到其他QQ号码了，如需解绑请联系管理员。"
+    invalid-or-expired-code: "&c验证码无效或已过期，请尝试重新加入游戏获取。"
+    bind-limit-reached: "&c此QQ号码已达到绑定上限。"
+
+  # GuestListener Messages
+  guest:
+    join-prompt: "&6请绑定您的QQ，验证码：%code%"
+    welcome: "&a欢迎回来, %player%!"
+    world-change-denied: "&c未验证无法离开当前世界！"
+    actionbar-prompt: "&6请输入 /bind <验证码> <QQ号码> 以完成绑定。"
+    binding-successful: "&a绑定成功！"

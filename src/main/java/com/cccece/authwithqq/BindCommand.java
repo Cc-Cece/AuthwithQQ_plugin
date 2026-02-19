@@ -2,6 +2,8 @@ package com.cccece.authwithqq;
 
 import java.util.Objects;
 import java.util.UUID; // Added for UUID handling
+import java.util.Map; // Added for MessageManager
+import com.cccece.authwithqq.util.MessageManager;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
@@ -33,12 +35,12 @@ public class BindCommand implements CommandExecutor {
   public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command,
                            @NotNull String label, @NotNull String[] args) {
     if (!(sender instanceof Player player)) {
-      sender.sendMessage(Component.text("This command is for players only.", NamedTextColor.RED));
+      sender.sendMessage(plugin.getMessageManager().getMessage("messages.bind-command.player-only"));
       return true;
     }
 
     if (args.length < 2) {
-      sender.sendMessage(Component.text("用法: /bind <验证码> <QQ号码>", NamedTextColor.RED));
+      sender.sendMessage(plugin.getMessageManager().getMessage("messages.bind-command.usage"));
       return true;
     }
 
@@ -47,23 +49,23 @@ public class BindCommand implements CommandExecutor {
     try {
       qq = Long.parseLong(args[1]);
     } catch (NumberFormatException e) {
-      sender.sendMessage(Component.text("无效的QQ号码: " + args[1] + "。", NamedTextColor.RED));
+      sender.sendMessage(plugin.getMessageManager().getMessage("messages.bind-command.invalid-qq", Map.of("%qq%", args[1])));
       return true;
     }
 
     // Check if player is already bound
     long existingQq = plugin.getDatabaseManager().getQq(player.getUniqueId());
     if (existingQq != 0 && existingQq == qq) {
-      sender.sendMessage(Component.text("你已经绑定到此QQ号码了。", NamedTextColor.YELLOW));
+      sender.sendMessage(plugin.getMessageManager().getMessage("messages.bind-command.already-bound-to-this-qq"));
       return true;
     } else if (existingQq != 0 && existingQq != qq) {
-      sender.sendMessage(Component.text("你已经绑定到其他QQ号码了，如需解绑请联系管理员。", NamedTextColor.RED));
+      sender.sendMessage(plugin.getMessageManager().getMessage("messages.bind-command.already-bound-to-other-qq"));
       return true;
     }
 
     // Validate the code using the centralized manager
     if (!plugin.isValidCode(code, player.getUniqueId())) {
-      sender.sendMessage(Component.text("验证码无效或已过期，请尝试重新加入游戏获取。", NamedTextColor.RED));
+      sender.sendMessage(plugin.getMessageManager().getMessage("messages.bind-command.invalid-or-expired-code"));
       return true;
     }
 
@@ -71,7 +73,7 @@ public class BindCommand implements CommandExecutor {
     int maxAccountsPerQq = plugin.getConfig().getInt("binding.max-accounts-per-qq", 1);
     int currentAccountCount = plugin.getDatabaseManager().getAccountCountByQq(qq);
     if (currentAccountCount >= maxAccountsPerQq) {
-      sender.sendMessage(Component.text("此QQ号码已达到绑定上限。", NamedTextColor.RED));
+      sender.sendMessage(plugin.getMessageManager().getMessage("messages.bind-command.bind-limit-reached"));
       return true;
     }
     // --- END Multi-Account Binding Check ---

@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.UUID; // Added for UUID handling
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
+import com.cccece.authwithqq.util.MessageManager;
 import org.bukkit.Bukkit; // Added for player lookup
 import org.bukkit.OfflinePlayer; // Added for player lookup
 import org.bukkit.command.Command;
@@ -40,7 +41,7 @@ public class AuthCommand implements CommandExecutor, TabCompleter {
   public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command,
                            @NotNull String label, @NotNull String[] args) {
     if (!sender.isOp()) { // Simple OP check for all admin commands
-      sender.sendMessage(Component.text("你没有权限执行此命令。", NamedTextColor.RED));
+      sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.no-permission"));
       return true;
     }
 
@@ -54,12 +55,12 @@ public class AuthCommand implements CommandExecutor, TabCompleter {
     switch (subCommand) {
       case "reload":
         plugin.reloadConfig();
-        sender.sendMessage(Component.text("配置已重载。", NamedTextColor.GREEN));
+        sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.reload-success"));
         return true;
 
       case "csv":
         if (args.length < 2) {
-          sender.sendMessage(Component.text("用法: /auth csv <export|import>", NamedTextColor.RED));
+          sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.command-usage.csv"));
           return true;
         }
         handleCsvCommand(sender, args[1].toLowerCase());
@@ -67,7 +68,7 @@ public class AuthCommand implements CommandExecutor, TabCompleter {
 
       case "whitelist":
         if (args.length < 3) {
-          sender.sendMessage(Component.text("用法: /auth whitelist <add|remove> <player>", NamedTextColor.RED));
+          sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.command-usage.whitelist"));
           return true;
         }
         handleWhitelistCommand(sender, args[1].toLowerCase(), args[2]);
@@ -75,7 +76,7 @@ public class AuthCommand implements CommandExecutor, TabCompleter {
 
       case "bind":
         if (args.length < 3) {
-          sender.sendMessage(Component.text("用法: /auth bind <player> <qq>", NamedTextColor.RED));
+          sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.command-usage.bind"));
           return true;
         }
         handleBindCommand(sender, args[1], args[2]);
@@ -83,13 +84,13 @@ public class AuthCommand implements CommandExecutor, TabCompleter {
       
       case "bot":
         if (args.length < 4) {
-          sender.sendMessage(Component.text("用法: /auth bot add <owner_name> <bot_name>", NamedTextColor.RED));
+          sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.command-usage.bot-add"));
           return true;
         }
         if ("add".equalsIgnoreCase(args[1])) {
           handleBotAddCommand(sender, args[2], args[3]);
         } else {
-          sender.sendMessage(Component.text("用法: /auth bot add <owner_name> <bot_name>", NamedTextColor.RED));
+          sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.command-usage.bot-add"));
         }
         return true;
 
@@ -100,12 +101,12 @@ public class AuthCommand implements CommandExecutor, TabCompleter {
   }
 
   private void sendHelpMessage(CommandSender sender) {
-    sender.sendMessage(Component.text("--- AuthWithQq Admin Commands ---", NamedTextColor.YELLOW));
-    sender.sendMessage(Component.text("/auth reload - 重载插件配置。", NamedTextColor.AQUA));
-    sender.sendMessage(Component.text("/auth csv <export|import> - 导出/导入玩家数据。", NamedTextColor.AQUA));
-    sender.sendMessage(Component.text("/auth whitelist <add|remove> <player> - 管理白名单玩家。", NamedTextColor.AQUA));
-    sender.sendMessage(Component.text("/auth bind <player> <qq> - 强制绑定玩家QQ。", NamedTextColor.AQUA));
-    sender.sendMessage(Component.text("/auth bot add <owner> <bot_name> - 绑定假人到玩家。", NamedTextColor.AQUA));
+    sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.help.header"));
+    sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.help.reload"));
+    sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.help.csv"));
+    sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.help.whitelist"));
+    sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.help.bind"));
+    sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.help.bot-add"));
   }
 
   private void handleCsvCommand(CommandSender sender, String action) {
@@ -113,26 +114,24 @@ public class AuthCommand implements CommandExecutor, TabCompleter {
       File file = new File(plugin.getDataFolder(), "export.csv");
       try {
         plugin.getCsvManager().exportCsv(file);
-        String message = "数据已导出到 " + file.getName();
-        sender.sendMessage(Component.text(message, NamedTextColor.GREEN));
+        sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.csv.export-success", Map.of("%file%", file.getName())));
       } catch (IOException e) {
-        sender.sendMessage(Component.text("导出失败: " + e.getMessage(), NamedTextColor.RED));
+        sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.csv.export-fail", Map.of("%error%", e.getMessage())));
       }
     } else if ("import".equals(action)) {
       File file = new File(plugin.getDataFolder(), "import.csv");
       if (!file.exists()) {
-        sender.sendMessage(Component.text("文件 import.csv 未在插件文件夹中找到！", NamedTextColor.RED));
+        sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.csv.import-file-not-found"));
         return;
       }
       try {
         plugin.getCsvManager().importCsv(file);
-        String message = "数据已从 " + file.getName() + " 导入。";
-        sender.sendMessage(Component.text(message, NamedTextColor.GREEN));
+        sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.csv.import-success", Map.of("%file%", file.getName())));
       } catch (IOException e) {
-        sender.sendMessage(Component.text("导入失败: " + e.getMessage(), NamedTextColor.RED));
+        sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.csv.import-fail", Map.of("%error%", e.getMessage())));
       }
     } else {
-      sender.sendMessage(Component.text("用法: /auth csv <export|import>", NamedTextColor.RED));
+      sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.command-usage.csv"));
     }
   }
 
@@ -145,19 +144,19 @@ public class AuthCommand implements CommandExecutor, TabCompleter {
         if (!whitelistedPlayers.contains(playerName)) {
           whitelistedPlayers.add(playerName);
           changed = true;
-          sender.sendMessage(Component.text("玩家 " + playerName + " 已添加到白名单。", NamedTextColor.GREEN));
+          sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.whitelist.add-success", Map.of("%player%", playerName)));
         } else {
-          sender.sendMessage(Component.text("玩家 " + playerName + " 已经在白名单中。", NamedTextColor.YELLOW));
+          sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.whitelist.already-whitelisted", Map.of("%player%", playerName)));
         }
       } else if ("remove".equals(action)) {
         if (whitelistedPlayers.remove(playerName)) {
           changed = true;
-          sender.sendMessage(Component.text("玩家 " + playerName + " 已从白名单移除。", NamedTextColor.GREEN));
+          sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.whitelist.remove-success", Map.of("%player%", playerName)));
         } else {
-          sender.sendMessage(Component.text("玩家 " + playerName + " 不在白名单中。", NamedTextColor.YELLOW));
+          sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.whitelist.not-whitelisted", Map.of("%player%", playerName)));
         }
       } else {
-        sender.sendMessage(Component.text("用法: /auth whitelist <add|remove> <player>", NamedTextColor.RED));
+        sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.command-usage.whitelist"));
         return;
       }
 
@@ -181,7 +180,7 @@ public class AuthCommand implements CommandExecutor, TabCompleter {
       }
 
       if (playerUuid == null) {
-        sender.sendMessage(Component.text("找不到玩家 " + playerName + "。", NamedTextColor.RED));
+        sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.bind.player-not-found", Map.of("%player%", playerName)));
         return;
       }
 
@@ -189,12 +188,12 @@ public class AuthCommand implements CommandExecutor, TabCompleter {
       try {
         qq = Long.parseLong(qqString);
       } catch (NumberFormatException e) {
-        sender.sendMessage(Component.text("无效的QQ号码: " + qqString + "。", NamedTextColor.RED));
+        sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.bind.invalid-qq", Map.of("%qq%", qqString)));
         return;
       }
 
       plugin.getDatabaseManager().updateBinding(playerUuid, qq);
-      sender.sendMessage(Component.text("已强制绑定玩家 " + playerName + " (" + playerUuid + ") 到 QQ " + qq + "。", NamedTextColor.GREEN));
+      sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.bind.force-bind-success", Map.of("%player%", playerName, "%uuid%", playerUuid.toString(), "%qq%", String.valueOf(qq))));
     });
   }
 
@@ -209,14 +208,14 @@ public class AuthCommand implements CommandExecutor, TabCompleter {
       }
 
       if (ownerUuid == null) {
-        sender.sendMessage(Component.text("找不到所有者玩家 " + ownerName + "。", NamedTextColor.RED));
+        sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.bot.owner-not-found", Map.of("%owner%", ownerName)));
         return;
       }
 
       // Check owner is bound to a QQ
       long ownerQq = plugin.getDatabaseManager().getQq(ownerUuid);
       if (ownerQq == 0) {
-        sender.sendMessage(Component.text("所有者 " + ownerName + " 未绑定QQ，无法绑定假人。", NamedTextColor.RED));
+        sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.bot.owner-qq-not-bound", Map.of("%owner%", ownerName)));
         return;
       }
 
@@ -224,7 +223,7 @@ public class AuthCommand implements CommandExecutor, TabCompleter {
       int maxBotsPerPlayer = plugin.getConfig().getInt("binding.max-bots-per-player", 0);
       int currentBotCount = plugin.getDatabaseManager().getBotCountForOwner(ownerUuid);
       if (maxBotsPerPlayer > 0 && currentBotCount >= maxBotsPerPlayer) {
-        sender.sendMessage(Component.text("所有者 " + ownerName + " 已达到假人绑定上限 (" + maxBotsPerPlayer + ")。", NamedTextColor.RED));
+        sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.bot.bot-limit-reached", Map.of("%owner%", ownerName, "%limit%", String.valueOf(maxBotsPerPlayer))));
         return;
       }
 
@@ -232,7 +231,7 @@ public class AuthCommand implements CommandExecutor, TabCompleter {
       UUID botUuid = UUID.nameUUIDFromBytes(("Bot-" + botName).getBytes(StandardCharsets.UTF_8));
 
       plugin.getDatabaseManager().markPlayerAsBot(botUuid, ownerUuid, botName);
-      sender.sendMessage(Component.text("已绑定假人 " + botName + " (" + botUuid + ") 到所有者 " + ownerName + " (" + ownerUuid + ")。", NamedTextColor.GREEN));
+      sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.bot.add-success", Map.of("%bot_name%", botName, "%bot_uuid%", botUuid.toString(), "%owner_name%", ownerName, "%owner_uuid%", ownerUuid.toString())));
     });
   }
 
