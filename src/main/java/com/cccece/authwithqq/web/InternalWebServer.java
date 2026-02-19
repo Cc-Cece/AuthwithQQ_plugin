@@ -20,6 +20,8 @@ import java.util.logging.Level;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+
 /**
  * An internal HTTP server for handling QQ bot requests.
  */
@@ -37,6 +39,7 @@ public class InternalWebServer {
    * @param port The port to listen on.
    * @param token The API token for authentication.
    */
+  @SuppressFBWarnings(value = "EI_EXPOSE_REP2", justification = "Plugin instance is a shared service, not meant for defensive copying.")
   public InternalWebServer(AuthWithQqPlugin plugin, int port, String token) {
     this.plugin = plugin;
     this.port = port;

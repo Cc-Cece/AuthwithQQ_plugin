@@ -7,11 +7,12 @@ import com.cccece.authwithqq.web.InternalWebServer;
 import java.io.File;
 import java.util.HashMap;
 import java.util.Map;
-import java.security.SecureRandom;
 import java.util.Objects;
+import java.security.SecureRandom; // Placed after java.util.Objects for CustomImportOrder
 import java.util.UUID;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.plugin.java.JavaPlugin;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
 /**
  * Main class for the AuthWithQq plugin.
@@ -88,6 +89,7 @@ public class AuthWithQqPlugin extends JavaPlugin {
    *
    * @return The DatabaseManager.
    */
+  @SuppressFBWarnings(value = "EI_EXPOSE_REP", justification = "DatabaseManager is a shared service, not meant for defensive copying.")
   public DatabaseManager getDatabaseManager() {
     return databaseManager;
   }

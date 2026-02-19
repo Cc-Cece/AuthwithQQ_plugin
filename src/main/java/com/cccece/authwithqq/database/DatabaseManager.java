@@ -1,5 +1,6 @@
 package com.cccece.authwithqq.database;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
@@ -27,6 +28,7 @@ public class DatabaseManager {
    * @param path The path to the SQLite database file.
    * @param logger The logger for reporting errors.
    */
+  @SuppressFBWarnings(value = "EI_EXPOSE_REP2", justification = "Logger instance is a shared service, not meant for defensive copying.")
   public DatabaseManager(String path, Logger logger) {
     this.url = "jdbc:sqlite:" + path;
     this.logger = logger;

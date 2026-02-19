@@ -5,6 +5,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
@@ -27,6 +28,8 @@ import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+
 /**
  * Handles guest restrictions for players who have not bound their QQ.
  */
@@ -42,6 +45,7 @@ public class GuestListener implements Listener {
    *
    * @param plugin The plugin instance.
    */
+  @SuppressFBWarnings(value = "EI_EXPOSE_REP2", justification = "Plugin instance is a shared service, not meant for defensive copying.")
   public GuestListener(AuthWithQqPlugin plugin) {
     this.plugin = plugin;
   }
@@ -233,8 +237,9 @@ public class GuestListener implements Listener {
           && event.getTo().getWorld() != null
           && !event.getFrom().getWorld().equals(event.getTo().getWorld())) {
         event.setCancelled(true);
-        String deniedMessage = plugin.getConfig()
-            .getString("messages.world-change-denied", "&c未验证无法离开当前世界！");
+        String deniedMessage = Objects.requireNonNullElse(plugin.getConfig()
+            .getString("messages.world-change-denied", "&c未验证无法离开当前世界！"),
+            "&c未验证无法离开当前世界！");
         event.getPlayer().sendMessage(serializer.deserialize(deniedMessage));
       }
     }
@@ -253,8 +258,9 @@ public class GuestListener implements Listener {
           && event.getTo().getWorld() != null
           && !event.getFrom().getWorld().equals(event.getTo().getWorld())) {
         event.setCancelled(true);
-        String deniedMessage = plugin.getConfig()
-            .getString("messages.world-change-denied", "&c未验证无法离开当前世界！");
+        String deniedMessage = Objects.requireNonNullElse(plugin.getConfig()
+            .getString("messages.world-change-denied", "&c未验证无法离开当前世界！"),
+            "&c未验证无法离开当前世界！");
         event.getPlayer().sendMessage(serializer.deserialize(deniedMessage));
       }
     }
@@ -287,8 +293,9 @@ public class GuestListener implements Listener {
   }
 
   private void sendActionbar(Player player) {
-    String prompt = plugin.getConfig()
-        .getString("messages.bind-prompt", "&6请输入 /绑定 <验证码> 以完成绑定。");
+    String prompt = Objects.requireNonNullElse(plugin.getConfig()
+        .getString("messages.bind-prompt", "&6请输入 /绑定 <验证码> 以完成绑定。"),
+        "&6请输入 /绑定 <验证码> 以完成绑定。");
     player.sendActionBar(serializer.deserialize(prompt));
   }
 
@@ -315,8 +322,8 @@ public class GuestListener implements Listener {
         player.setGameMode(GameMode.SURVIVAL);
       }
       
-      String success = plugin.getConfig()
-          .getString("messages.success", "&aBinding successful!");
+            String success = Objects.requireNonNullElse(plugin.getConfig().getString("messages.success",
+                "&aBinding successful!"), "&aBinding successful!");
       player.sendMessage(serializer.deserialize(success));
       player.showTitle(
           Title.title(serializer.deserialize(success), net.kyori.adventure.text.Component.empty()));

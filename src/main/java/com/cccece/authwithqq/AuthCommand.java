@@ -14,6 +14,8 @@ import org.bukkit.command.TabCompleter;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+
 /**
  * Admin command handler for AuthWithQq.
  */
@@ -25,6 +27,7 @@ public class AuthCommand implements CommandExecutor, TabCompleter {
    *
    * @param plugin The plugin instance.
    */
+  @SuppressFBWarnings(value = "EI_EXPOSE_REP2", justification = "Plugin instance is a shared service, not meant for defensive copying.")
   public AuthCommand(AuthWithQqPlugin plugin) {
     this.plugin = plugin;
   }

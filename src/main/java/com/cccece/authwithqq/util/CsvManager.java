@@ -18,6 +18,8 @@ import java.util.UUID;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+
 /**
  * Handles CSV export and import for player data.
  */
@@ -31,6 +33,7 @@ public class CsvManager {
    * @param databaseManager The database manager.
    * @param logger The logger.
    */
+  @SuppressFBWarnings(value = {"EI_EXPOSE_REP2"}, justification = "DatabaseManager and Logger instances are shared services, not meant for defensive copying.")
   public CsvManager(DatabaseManager databaseManager, Logger logger) {
     this.databaseManager = databaseManager;
     this.logger = logger;
