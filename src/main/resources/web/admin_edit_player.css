@@ -2,4 +2,29 @@
 
 /* admin_edit_player.css - Specific styles for admin_edit_player.html */
 
-/* Any specific styles for this page that override or extend common.css can go here */
+body {
+    align-items: center;
+}
+
+.container {
+    max-width: 600px;
+    padding: 0;
+}
+
+.card {
+    padding: 32px;
+}
+
+h3 {
+    margin-top: 32px;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 12px;
+    margin-bottom: 24px;
+    font-size: 1.125rem;
+    color: var(--text-primary);
+}
+
+.button-primary {
+    width: 100%;
+    margin-top: 24px;
+}
