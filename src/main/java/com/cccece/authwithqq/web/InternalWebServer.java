@@ -69,6 +69,7 @@ public class InternalWebServer {
       server.createContext("/api/admin/bind", new AdminBindHandler()); // New: API for admin binding operations
       server.createContext("/api/profile", new ProfileViewHandler()); // New: API for viewing player profile
       server.createContext("/api/profile/update", new ProfileUpdateHandler()); // New: API for updating player profile
+      server.createContext("/api/query", new QueryHandler()); // New: API for querying player data
       server.createContext("/", new RedirectHandler("/web/dashboard.html")); // Redirect to dashboard
       server.createContext("/dashboard", new RedirectHandler("/web/dashboard.html")); // Explicit dashboard route
       server.createContext("/admin", new AuthenticatedRedirectHandler("/web/admin.html")); // Admin console
@@ -809,10 +810,98 @@ public class InternalWebServer {
         plugin.getDatabaseManager().deleteBot(botUuid);
         
         sendResponse(exchange, 200, "{\"success\":true, \"message\":\"Bot " + botIdentifier + " unbound successfully\"}");
-      } catch (Exception e) {
-        plugin.getLogger().log(Level.SEVERE, "Error during bot unbind operation", e);
-        sendResponse(exchange, 500, "{\"error\":\"Internal server error\"}");
+            } catch (Exception e) {
+              plugin.getLogger().log(Level.SEVERE, "Error during bot unbind operation", e);
+              sendResponse(exchange, 500, "{\"error\":\"Internal server error\"}");
+            }
+          }
+        }
+      
+        private class QueryHandler implements HttpHandler {
+          @Override
+          public void handle(HttpExchange exchange) throws IOException {
+            if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+              sendResponse(exchange, 405, "{\"success\":false, \"error\":\"Method not allowed\"}");
+              return;
+            }
+            if (!authenticate(exchange)) {
+              // Response is sent from within authenticate method
+              return;
+            }
+      
+            Map<String, String> params = AuthWithQqPlugin.parseQuery(exchange.getRequestURI().getQuery());
+            String by = params.get("by");
+            String value = params.get("value");
+      
+            if (by == null || value == null || by.isEmpty() || value.isEmpty()) {
+              sendResponse(exchange, 400, "{\"success\":false, \"error\":\"Missing 'by' or 'value' parameters\"}");
+              return;
+            }
+      
+            try {
+              JsonObject data = new JsonObject();
+              boolean found = false;
+      
+              switch (by) {
+                case "code":
+                  Map<String, String> playerInfo = plugin.findPlayerInfoByCode(value);
+                  if (playerInfo != null) {
+                    data.addProperty("uuid", playerInfo.get("uuid"));
+                    data.addProperty("name", playerInfo.get("name"));
+                    found = true;
+                  }
+                  break;
+      
+                case "qq":
+                  try {
+                    long qq = Long.parseLong(value);
+                    UUID uuidByQq = plugin.getDatabaseManager().findUuidByQq(qq);
+                    if (uuidByQq != null) {
+                      // We need to get the name, which might involve a main thread call
+                      Future<String> futureName = Bukkit.getScheduler().callSyncMethod(plugin,
+                          () -> Bukkit.getOfflinePlayer(uuidByQq).getName());
+                      String name = futureName.get();
+      
+                      data.addProperty("uuid", uuidByQq.toString());
+                      data.addProperty("name", name);
+                      found = true;
+                    }
+                  } catch (NumberFormatException e) {
+                    sendResponse(exchange, 400, "{\"success\":false, \"error\":\"Invalid QQ number format\"}");
+                    return;
+                  }
+                  break;
+      
+                case "name":
+                  // This can also be a QQ, the DB method handles it
+                  Future<UUID> futureUuid = Bukkit.getScheduler().callSyncMethod(plugin,
+                      () -> plugin.getDatabaseManager().findUuidByNameOrQq(value));
+                  UUID uuidByName = futureUuid.get();
+                  if (uuidByName != null) {
+                    data.addProperty("uuid", uuidByName.toString());
+                    found = true;
+                  }
+                  break;
+      
+                default:
+                  sendResponse(exchange, 400, "{\"success\":false, \"error\":\"Invalid 'by' parameter\"}");
+                  return;
+              }
+      
+              if (found) {
+                JsonObject response = new JsonObject();
+                response.addProperty("success", true);
+                response.add("data", data);
+                sendResponse(exchange, 200, gson.toJson(response));
+              } else {
+                sendResponse(exchange, 404, "{\"success\":false, \"error\":\"Data not found\"}");
+              }
+      
+            } catch (InterruptedException | ExecutionException e) {
+              plugin.getLogger().log(Level.SEVERE, "Error during query operation", e);
+              sendResponse(exchange, 500, "{\"success\":false, \"error\":\"Internal server error\"}");
+            }
+          }
+        }
       }
-    }
-  }
-}
+      

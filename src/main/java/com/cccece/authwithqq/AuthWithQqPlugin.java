@@ -262,6 +262,40 @@ public class AuthWithQqPlugin extends JavaPlugin {
     playerVerificationCodes.remove(uuid);
   }
 
+  /**
+   * Finds a player's UUID and name by their verification code.
+   * This method is designed to be thread-safe for read operations.
+   *
+   * @param code The verification code to search for.
+   * @return A map containing "uuid" and "name", or null if not found or expired.
+   */
+  public Map<String, String> findPlayerInfoByCode(String code) {
+    if (code == null || code.isEmpty()) {
+      return null;
+    }
+    int codeExpiration = getConfig().getInt("binding.code-expiration", 300); // Default 300 seconds
+
+    for (Map.Entry<UUID, VerificationCodeEntry> entry : playerVerificationCodes.entrySet()) {
+      VerificationCodeEntry verificationEntry = entry.getValue();
+      if (verificationEntry.code.equals(code)) {
+        // Check if the code is expired
+        if ((System.currentTimeMillis() - verificationEntry.timestamp) < (codeExpiration * 1000L)) {
+          UUID playerUuid = entry.getKey();
+          String playerName = Bukkit.getOfflinePlayer(playerUuid).getName();
+
+          Map<String, String> playerInfo = new HashMap<>();
+          playerInfo.put("uuid", playerUuid.toString());
+          playerInfo.put("name", playerName != null ? playerName : "");
+          return playerInfo;
+        } else {
+          // Code found but expired
+          return null;
+        }
+      }
+    }
+    return null; // Code not found
+  }
+
   // --- Profile Session Token Management ---
   private final Map<String, ProfileSessionTokenEntry> playerProfileSessionTokens = new HashMap<>(); // Token -> Entry
   private final Map<UUID, String> playerToTokenMap = new HashMap<>(); // Player UUID -> Token for quick lookup
