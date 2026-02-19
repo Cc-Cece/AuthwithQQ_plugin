@@ -37,7 +37,7 @@ public class GuestListener implements Listener {
   private final AuthWithQqPlugin plugin;
   private final Set<UUID> guestCache = new HashSet<>();
   private final Map<UUID, GameMode> originalGameModes = new HashMap<>();
-  private final Map<UUID, String> playerVerificationCodes = new HashMap<>();
+  private final Map<UUID, VerificationCodeEntry> playerVerificationCodes = new HashMap<>();
   private final LegacyComponentSerializer serializer = LegacyComponentSerializer.legacyAmpersand();
 
   /**
@@ -48,6 +48,17 @@ public class GuestListener implements Listener {
   @SuppressFBWarnings(value = "EI_EXPOSE_REP2", justification = "Plugin instance is a shared service, not meant for defensive copying.")
   public GuestListener(AuthWithQqPlugin plugin) {
     this.plugin = plugin;
+  }
+
+  // Inner class to hold verification code and its generation timestamp
+  private static class VerificationCodeEntry {
+    final String code;
+    final long timestamp;
+
+    VerificationCodeEntry(String code, long timestamp) {
+      this.code = code;
+      this.timestamp = timestamp;
+    }
   }
 
   /**
@@ -124,9 +135,20 @@ public class GuestListener implements Listener {
             }
           }
 
-          // Generate and store verification code
-          String verificationCode = plugin.generateCode();
-          playerVerificationCodes.put(uuid, verificationCode);
+          // Generate and store verification code with expiration logic
+          int codeExpiration = plugin.getConfig().getInt("binding.code-expiration", 300); // Default 300 seconds
+          VerificationCodeEntry entry = playerVerificationCodes.get(uuid);
+          String verificationCode;
+
+          if (entry != null && (System.currentTimeMillis() - entry.timestamp) < (codeExpiration * 1000L)) {
+            // Use existing code if not expired
+            verificationCode = entry.code;
+          } else {
+            // Generate new code and store with current timestamp
+            verificationCode = plugin.generateCode();
+            playerVerificationCodes.put(uuid, new VerificationCodeEntry(verificationCode, System.currentTimeMillis()));
+          }
+
           String message = plugin.getConfig()
               .getString("messages.guest-join", "Please bind your QQ")
               .replace("%code%", verificationCode);
@@ -337,6 +359,11 @@ public class GuestListener implements Listener {
    * @return The verification code, or null if not found.
    */
   public String getVerificationCode(UUID uuid) {
-    return playerVerificationCodes.get(uuid);
+    int codeExpiration = plugin.getConfig().getInt("binding.code-expiration", 300); // Default 300 seconds
+    VerificationCodeEntry entry = playerVerificationCodes.get(uuid);
+    if (entry != null && (System.currentTimeMillis() - entry.timestamp) < (codeExpiration * 1000L)) {
+      return entry.code;
+    }
+    return null;
   }
 }
