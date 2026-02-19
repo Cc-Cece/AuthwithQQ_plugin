@@ -13,7 +13,7 @@
         <p>需要有效的 API Token 才能访问和操作。</p>
     </div>
     <div class="container">
-        <div class="card">
+        <div class="card" id="players-section">
             <h2>已绑定玩家列表</h2>
             <div class="table-container">
                 <table id="playersTable">
@@ -32,6 +32,27 @@
                 </table>
             </div>
             <p id="players-message"></p>
+        </div>
+
+        <div class="card" id="bots-section">
+            <h2>假人管理列表</h2>
+            <div class="table-container">
+                <table id="botsTable">
+                    <thead>
+                        <tr>
+                            <th>UUID</th>
+                            <th>假人名</th>
+                            <th>所属主人 UUID</th>
+                            <th>创建时间</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Bot data will be loaded here -->
+                    </tbody>
+                </table>
+            </div>
+            <p id="bots-message"></p>
         </div>
 
 

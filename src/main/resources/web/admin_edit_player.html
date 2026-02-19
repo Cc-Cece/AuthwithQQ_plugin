@@ -24,14 +24,23 @@
                     <input type="text" id="playerName" name="playerName" readonly>
                 </div>
 
-                <div class="form-group">
-                    <label for="currentQq">当前QQ:</label>
-                    <input type="number" id="currentQq" name="currentQq" readonly>
+                <div class="real-player-only">
+                    <div class="form-group">
+                        <label for="currentQq">当前QQ:</label>
+                        <input type="number" id="currentQq" name="currentQq" readonly>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="newQq">新QQ号 (留空则不修改):</label>
+                        <input type="number" id="newQq" name="newQq">
+                    </div>
                 </div>
 
-                <div class="form-group">
-                    <label for="newQq">新QQ号 (留空则不修改):</label>
-                    <input type="number" id="newQq" name="newQq">
+                <div class="bot-only" style="display: none;">
+                    <div class="form-group">
+                        <label for="ownerUuid">所属主人 UUID:</label>
+                        <input type="text" id="ownerUuid" name="bot.owner_uuid">
+                    </div>
                 </div>
 
                 <h3>自定义字段</h3>

@@ -1,6 +1,8 @@
 document.addEventListener('DOMContentLoaded', () => {
     const playersTableBody = document.querySelector('#playersTable tbody');
+    const botsTableBody = document.querySelector('#botsTable tbody');
     const playersMessage = document.getElementById('players-message');
+    const botsMessage = document.getElementById('bots-message');
     // Removed pluginConfigPre and configMessage as they are no longer needed
 
     // Function to get API Token from URL or Cookie
@@ -41,33 +43,61 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             return response.json();
         })
-        .then(players => {
+        .then(allData => {
             playersTableBody.innerHTML = ''; // Clear existing data
-            if (players.length === 0) {
-                playersMessage.textContent = '没有已绑定的玩家。';
-                return;
+            botsTableBody.innerHTML = '';
+            
+            const realPlayers = allData.filter(p => p["bot.is_bot"] !== "true");
+            const bots = allData.filter(p => p["bot.is_bot"] === "true");
+
+            if (realPlayers.length === 0) {
+                playersMessage.textContent = '没有已绑定的常规玩家。';
+            } else {
+                playersMessage.textContent = '';
+                realPlayers.forEach(player => {
+                    const row = playersTableBody.insertRow();
+                    row.insertCell().textContent = player.UUID;
+                    row.insertCell().textContent = player.Name;
+                    row.insertCell().textContent = player.QQ;
+                    row.insertCell().textContent = new Date(parseInt(player.Created)).toLocaleString();
+
+                    const actionCell = row.insertCell();
+                    const editButton = document.createElement('button');
+                    editButton.textContent = '编辑';
+                    editButton.className = 'btn-edit';
+                    editButton.onclick = () => window.location.href = `admin_edit_player.html?uuid=${player.UUID}&token=${apiToken}`;
+                    actionCell.appendChild(editButton);
+
+                    const unbindButton = document.createElement('button');
+                    unbindButton.textContent = '解绑';
+                    unbindButton.className = 'btn-unbind';
+                    unbindButton.onclick = () => unbindPlayer(player.UUID);
+                    actionCell.appendChild(unbindButton);
+                });
             }
-            players.forEach(player => {
-                const row = playersTableBody.insertRow();
-                row.insertCell().textContent = player.UUID;
-                row.insertCell().textContent = player.Name;
-                row.insertCell().textContent = player.QQ;
-                row.insertCell().textContent = new Date(parseInt(player.Created)).toLocaleString();
 
-                const actionCell = row.insertCell();
-                const editButton = document.createElement('button');
-                editButton.textContent = '编辑';
-                editButton.className = 'btn-edit';
-                editButton.onclick = () => window.location.href = `admin_edit_player.html?uuid=${player.UUID}&token=${apiToken}`;
-                actionCell.appendChild(editButton);
+            if (bots.length === 0) {
+                botsMessage.textContent = '没有已创建的假人。';
+            } else {
+                botsMessage.textContent = '';
+                bots.forEach(bot => {
+                    const row = botsTableBody.insertRow();
+                    row.insertCell().textContent = bot.UUID;
+                    row.insertCell().textContent = bot.Name;
+                    row.insertCell().textContent = bot.Owner_uuid || bot["bot.owner_uuid"] || "未知";
+                    row.insertCell().textContent = new Date(parseInt(bot.Created)).toLocaleString();
 
-                const unbindButton = document.createElement('button');
-                unbindButton.textContent = '解绑';
-                unbindButton.className = 'btn-unbind';
-                unbindButton.onclick = () => unbindPlayer(player.UUID);
-                actionCell.appendChild(unbindButton);
-            });
-            playersMessage.textContent = ''; // Clear message on success
+                    const actionCell = row.insertCell();
+                    const editButton = document.createElement('button');
+                    editButton.textContent = '编辑';
+                    editButton.className = 'btn-edit';
+                    editButton.onclick = () => window.location.href = `admin_edit_player.html?uuid=${bot.UUID}&token=${apiToken}`;
+                    actionCell.appendChild(editButton);
+
+                    // Note: No 'Unbind' for bots since they don't have a QQ to unbind.
+                    // Could potentially add a delete button here if the API supported it.
+                });
+            }
         })
         .catch(error => {
             console.error('Error fetching players:', error);
