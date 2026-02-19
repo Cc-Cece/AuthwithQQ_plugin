@@ -60,19 +60,22 @@ messages:
       player-not-found: "&c找不到玩家 %player%."
       invalid-qq: "&c无效的QQ号码: %qq%."
       force-bind-success: "&a已强制绑定玩家 %player% (%uuid%) 到 QQ %qq%."
-    bot:
-      owner-not-found: "&c找不到所有者玩家 %owner%."
-      owner-qq-not-bound: "&c所有者 %owner% 未绑定QQ，无法绑定假人。"
-      bot-limit-reached: "&c所有者 %owner% 已达到假人绑定上限 (%limit%)。"
-      add-success: "&a已绑定假人 %bot_name% (%bot_uuid%) 到所有者 %owner_name% (%owner_uuid%)。"
-    help:
+          bot:
+            owner-not-found: "&c找不到所有者玩家 %owner%."
+            owner-qq-not-bound: "&c所有者 %owner% 未绑定QQ，无法绑定假人。"
+            bot-limit-reached: "&c所有者 %owner% 已达到假人绑定上限 (%limit%)。"
+            add-success: "&a已绑定假人 %bot_name% (%bot_uuid%) 到所有者 %owner_name% (%owner_uuid%)。"
+          unbind:
+            usage: "&c用法: /auth unbind <player>"
+            player-not-found: "&c找不到玩家 %player%。"
+            success: "&a已解除玩家 %player% 的QQ绑定。"    help:
       header: "&6--- AuthWithQq Admin Commands ---"
       reload: "&b/auth reload - 重载插件配置。"
       csv: "&b/auth csv <export|import> - 导出/导入玩家数据。"
       whitelist: "&b/auth whitelist <add|remove> <player> - 管理白名单玩家。"
       bind: "&b/auth bind <player> <qq> - 强制绑定玩家QQ。"
-      bot-add: "&b/auth bot add <owner> <bot_name> - 绑定假人到玩家。"
-
+            bot-add: "&b/auth bot add <owner> <bot_name> - 绑定假人到玩家。"
+          unbind: "&b/auth unbind <player> - 解除玩家QQ绑定。"
   # BindCommand Messages
   bind-command:
     player-only: "&cThis command is for players only."

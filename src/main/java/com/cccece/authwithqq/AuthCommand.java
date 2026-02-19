@@ -13,6 +13,7 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import com.cccece.authwithqq.util.MessageManager;
 import org.bukkit.Bukkit; // Added for player lookup
 import org.bukkit.OfflinePlayer; // Added for player lookup
+import org.bukkit.entity.Player; // Added for Player class in unbind command
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -95,6 +96,14 @@ public class AuthCommand implements CommandExecutor, TabCompleter {
         }
         return true;
 
+      case "unbind":
+        if (args.length < 2) {
+          sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.unbind.usage"));
+          return true;
+        }
+        handleUnbindCommand(sender, args[1]);
+        return true;
+
       default:
         sendHelpMessage(sender);
         return true;
@@ -108,6 +117,7 @@ public class AuthCommand implements CommandExecutor, TabCompleter {
     sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.help.whitelist"));
     sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.help.bind"));
     sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.help.bot-add"));
+    sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.help.unbind"));
   }
 
   private void handleCsvCommand(CommandSender sender, String action) {
@@ -238,6 +248,35 @@ public class AuthCommand implements CommandExecutor, TabCompleter {
     });
   }
 
+  private void handleUnbindCommand(CommandSender sender, String playerName) {
+    Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+      UUID tempPlayerUuid = plugin.getDatabaseManager().getPlayerUuid(playerName);
+      if (tempPlayerUuid == null) {
+        OfflinePlayer offlinePlayer = Bukkit.getOfflinePlayer(playerName);
+        if (offlinePlayer != null && offlinePlayer.hasPlayedBefore()) {
+          tempPlayerUuid = offlinePlayer.getUniqueId();
+        }
+      }
+      final UUID playerUuid = tempPlayerUuid;
+
+      if (playerUuid == null) {
+        sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.unbind.player-not-found", new HashMap<String, String>() {{ put("%player%", playerName); }}));
+        return;
+      }
+
+      plugin.getDatabaseManager().updateBinding(playerUuid, 0L); // Set QQ to 0 to unbind
+
+      // If player is online, send message and unmark as guest
+      Player onlinePlayer = Bukkit.getPlayer(playerUuid);
+      if (onlinePlayer != null) {
+        onlinePlayer.sendMessage(plugin.getMessageManager().getMessage("messages.auth.unbind.success", new HashMap<String, String>() {{ put("%player%", playerName); }}));
+        plugin.handleBindingSuccess(playerUuid); // This will unmark guest, clear effects etc.
+      }
+
+      sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.unbind.success", new HashMap<String, String>() {{ put("%player%", playerName); }}));
+    });
+  }
+
 
   @Override
   public @Nullable List<String> onTabComplete(@NotNull CommandSender sender,
@@ -254,6 +293,7 @@ public class AuthCommand implements CommandExecutor, TabCompleter {
       completions.add("whitelist");
       completions.add("bind");
       completions.add("bot");
+      completions.add("unbind"); // Add unbind for tab completion
       return filter(completions, args[0]);
     }
 
@@ -288,6 +328,10 @@ public class AuthCommand implements CommandExecutor, TabCompleter {
           break;
         case "bot": // /auth bot add <owner_name> <bot_name>
             // Suggest online players as owners
+            Bukkit.getOnlinePlayers().forEach(player -> completions.add(player.getName()));
+            break;
+        case "unbind": // /auth unbind <player>
+            // Suggest online players for unbind
             Bukkit.getOnlinePlayers().forEach(player -> completions.add(player.getName()));
             break;
         default:
