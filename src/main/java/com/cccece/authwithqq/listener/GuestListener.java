@@ -130,6 +130,18 @@ public class GuestListener implements Listener {
    */
   public void markGuest(Player player) {
     UUID uuid = player.getUniqueId();
+    
+    // --- NEW: Bot Bypass Logic ---
+    // If the player is a bot, unmark them as guest and skip all restrictions.
+    // Also consider if guest-mode.allow-fake-players is true as a general bypass.
+    boolean allowFakePlayers = plugin.getConfig().getBoolean("guest-mode.allow-fake-players", false);
+    if (plugin.getDatabaseManager().isBot(uuid) || (allowFakePlayers && player.hasMetadata("NPC"))) {
+        plugin.getLogger().info(player.getName() + " is a bot or fake player, skipping guest restrictions.");
+        unmarkGuest(uuid); // Unmark immediately, essentially treating them as bound
+        return;
+    }
+    // --- END NEW LOGIC ---
+
     guestCache.add(uuid);
     
     // Store original game mode

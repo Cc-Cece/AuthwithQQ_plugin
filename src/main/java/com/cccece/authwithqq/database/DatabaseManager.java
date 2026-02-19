@@ -299,6 +299,34 @@ public class DatabaseManager {
   }
 
   /**
+   * Finds a player's UUID by name or QQ number.
+   *
+   * @param identifier The player's name, UUID string, or QQ number.
+   * @return The UUID, or null if not found.
+   */
+  public UUID findUuidByNameOrQq(String identifier) {
+    // Try to parse as UUID first
+    try {
+      return UUID.fromString(identifier);
+    } catch (IllegalArgumentException e) {
+      // Not a UUID, try by name
+      UUID uuidByName = getPlayerUuid(identifier);
+      if (uuidByName != null) {
+        return uuidByName;
+      }
+
+      // Not a name, try by QQ
+      try {
+        long qq = Long.parseLong(identifier);
+        return findUuidByQq(qq);
+      } catch (NumberFormatException e2) {
+        // Not a QQ number either
+        return null;
+      }
+    }
+  }
+
+  /**
    * Counts the number of accounts bound to a specific QQ number.
    *
    * @param qq The QQ number.
@@ -313,6 +341,7 @@ public class DatabaseManager {
         if (rs.next()) {
           return rs.getInt(1);
         }
+        return 0; // Added for clarity, though rs.getInt(1) would be 0 if no results
       }
     } catch (SQLException e) {
       logger.log(Level.SEVERE, "Could not get account count by QQ", e);
@@ -355,5 +384,76 @@ public class DatabaseManager {
       logger.log(Level.SEVERE, "Could not get bot count for owner", e);
     }
     return 0;
+  }
+
+  /**
+   * Checks if a given UUID belongs to a bot.
+   *
+   * @param uuid The UUID to check.
+   * @return true if the UUID is associated with a bot, false otherwise.
+   */
+  public boolean isBot(UUID uuid) {
+    String sql = "SELECT COUNT(*) FROM player_meta WHERE uuid = ? AND meta_key = 'bot.is_bot' AND meta_value = 'true'";
+    try (Connection conn = getConnection();
+         PreparedStatement pstmt = conn.prepareStatement(sql)) {
+      pstmt.setString(1, uuid.toString());
+      try (ResultSet rs = pstmt.executeQuery()) {
+        if (rs.next()) {
+          return rs.getInt(1) > 0;
+        }
+      }
+    } catch (SQLException e) {
+      logger.log(Level.SEVERE, "Could not check if UUID is bot", e);
+    }
+    return false;
+  }
+
+  /**
+   * Deletes a bot and its associated metadata.
+   *
+   * @param botUuid The UUID of the bot to delete.
+   */
+  public void deleteBot(UUID botUuid) {
+    // Delete bot's metadata
+    String sqlMeta = "DELETE FROM player_meta WHERE uuid = ?";
+    try (Connection conn = getConnection();
+         PreparedStatement pstmt = conn.prepareStatement(sqlMeta)) {
+      pstmt.setString(1, botUuid.toString());
+      pstmt.executeUpdate();
+    } catch (SQLException e) {
+      logger.log(Level.SEVERE, "Could not delete bot metadata", e);
+    }
+
+    // Delete bot from auth_players table
+    String sqlPlayer = "DELETE FROM auth_players WHERE uuid = ?";
+    try (Connection conn = getConnection();
+         PreparedStatement pstmt = conn.prepareStatement(sqlPlayer)) { // Corrected line
+      pstmt.setString(1, botUuid.toString());
+      pstmt.executeUpdate();
+    } catch (SQLException e) {
+      logger.log(Level.SEVERE, "Could not delete bot from auth_players", e);
+    }
+  }
+
+  /**
+   * Gets the owner UUID of a bot.
+   *
+   * @param botUuid The UUID of the bot.
+   * @return The owner's UUID, or null if not found or not a bot.
+   */
+  public UUID getBotOwner(UUID botUuid) {
+    String sql = "SELECT meta_value FROM player_meta WHERE uuid = ? AND meta_key = 'bot.owner_uuid'";
+    try (Connection conn = getConnection();
+         PreparedStatement pstmt = conn.prepareStatement(sql)) {
+      pstmt.setString(1, botUuid.toString());
+      try (ResultSet rs = pstmt.executeQuery()) {
+        if (rs.next()) {
+          return UUID.fromString(rs.getString("meta_value"));
+        }
+      }
+    } catch (SQLException e) {
+      logger.log(Level.SEVERE, "Could not get bot owner", e);
+    }
+    return null;
   }
 }

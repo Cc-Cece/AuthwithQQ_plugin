@@ -2,7 +2,7 @@ package com.cccece.authwithqq.web;
 
 import com.cccece.authwithqq.AuthWithQqPlugin;
 import com.google.gson.Gson;
-import com.google.gson.JsonArray; // ADDED
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
@@ -13,7 +13,7 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
-import java.util.List; // ADDED THIS IMPORT
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
@@ -21,6 +21,7 @@ import java.util.concurrent.Future;
 import java.util.logging.Level;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
+import org.bukkit.OfflinePlayer; // ADDED for AdminBindHandler
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
@@ -64,6 +65,7 @@ public class InternalWebServer {
       server.createContext("/api/unbind", new UnbindHandler()); // API for unbinding players
       server.createContext("/api/config", new ConfigHandler()); // API for plugin configuration
       server.createContext("/api/bot/bind", new BotBindHandler()); // New: API for binding fake players
+      server.createContext("/api/bot/unbind", new BotUnbindHandler()); // New: API for unbinding fake players
       server.createContext("/api/admin/bind", new AdminBindHandler()); // New: API for admin binding operations
       server.createContext("/api/profile", new ProfileViewHandler()); // New: API for viewing player profile
       server.createContext("/api/profile/update", new ProfileUpdateHandler()); // New: API for updating player profile
@@ -440,7 +442,7 @@ public class InternalWebServer {
     }
   }
 
-  // New: Handles binding a bot to an owner
+  // New: Handles binding a bot to an owner via API (QQ bot or similar)
   private class BotBindHandler implements HttpHandler {
     @Override
     public void handle(HttpExchange exchange) throws IOException {
@@ -452,14 +454,32 @@ public class InternalWebServer {
       try (BufferedReader reader = new BufferedReader(
           new InputStreamReader(exchange.getRequestBody(), StandardCharsets.UTF_8))) {
         JsonObject body = gson.fromJson(reader, JsonObject.class);
-        String ownerUuidString = body.get("owner_uuid").getAsString();
-        String botName = body.get("bot_name").getAsString();
+        // Accepts owner_uuid, owner_name, or owner_qq as identifier
+        String ownerIdentifier = null;
+        if (body.has("owner_uuid")) {
+            ownerIdentifier = body.get("owner_uuid").getAsString();
+        } else if (body.has("owner_name")) {
+            ownerIdentifier = body.get("owner_name").getAsString();
+        } else if (body.has("owner_qq")) {
+            ownerIdentifier = body.get("owner_qq").getAsString();
+        }
+        
+        String botName = body.has("bot_name") ? body.get("bot_name").getAsString() : null;
 
-        UUID ownerUuid;
-        try {
-          ownerUuid = UUID.fromString(ownerUuidString);
-        } catch (IllegalArgumentException e) {
-          sendResponse(exchange, 400, "Invalid owner_uuid format");
+        if (ownerIdentifier == null || botName == null || botName.isEmpty()) {
+          sendResponse(exchange, 400, "{\"success\":false, \"error\":\"Missing owner identifier or bot_name\"}");
+          return;
+        }
+
+        final String finalOwnerIdentifier = ownerIdentifier;
+        // Resolve owner_uuid from identifier on the main Bukkit thread
+        Future<UUID> futureOwnerUuid = Bukkit.getScheduler().callSyncMethod(plugin, () -> 
+            plugin.getDatabaseManager().findUuidByNameOrQq(finalOwnerIdentifier)
+        );
+        UUID ownerUuid = futureOwnerUuid.get();
+
+        if (ownerUuid == null) {
+          sendResponse(exchange, 400, "{\"success\":false, \"error\":\"Owner not found from identifier\"}");
           return;
         }
         
@@ -473,17 +493,21 @@ public class InternalWebServer {
         // Check bot limit
         int maxBotsPerPlayer = plugin.getConfig().getInt("binding.max-bots-per-player", 0);
         int currentBotCount = plugin.getDatabaseManager().getBotCountForOwner(ownerUuid);
-        if (maxBotsPerPlayer > 0 && currentBotCount >= maxBotsPerPlayer) {
+        if (maxBotsPerPlayer > 0 && currentBotCount >= maxBotsPerPlayer) { 
           sendResponse(exchange, 400, "{\"success\":false, \"error\":\"达到假人绑定上限\"}");
           return;
         }
 
-        // Generate a UUID for the bot (deterministic based on name for consistency if needed, or random)
+        // Generate a UUID for the bot (deterministic based on name for consistency)
         UUID botUuid = UUID.nameUUIDFromBytes(("Bot-" + botName).getBytes(StandardCharsets.UTF_8));
+
+        // Ensure botName is not already bound to another owner
+        // (This check is not explicitly requested but is good practice to prevent bot name conflicts)
+        // ... potentially add logic here to check if botUuid is already owned by someone else
 
         plugin.getDatabaseManager().markPlayerAsBot(botUuid, ownerUuid, botName);
         
-        sendResponse(exchange, 200, "{\"success\":true}");
+        sendResponse(exchange, 200, "{\"success\":true, \"message\":\"Bot " + botName + " bound to owner " + ownerUuid + "\"}");
       } catch (Exception e) {
         plugin.getLogger().log(Level.SEVERE, "Error during bot bind operation", e);
         sendResponse(exchange, 500, "{\"error\":\"Internal server error\"}");
@@ -737,6 +761,56 @@ public class InternalWebServer {
         sendResponse(exchange, 200, "{\"success\":true, \"message\":\"Profile updated successfully\"}");
       } catch (Exception e) {
         plugin.getLogger().log(Level.SEVERE, "Error updating profile", e);
+        sendResponse(exchange, 500, "{\"error\":\"Internal server error\"}");
+      }
+    }
+  }
+
+  // New: Handles unbinding a bot from an owner via API
+  private class BotUnbindHandler implements HttpHandler {
+    @Override
+    public void handle(HttpExchange exchange) throws IOException {
+      if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+        sendResponse(exchange, 405, "Method not allowed");
+        return;
+      }
+
+      try (BufferedReader reader = new BufferedReader(
+          new InputStreamReader(exchange.getRequestBody(), StandardCharsets.UTF_8))) {
+        JsonObject body = gson.fromJson(reader, JsonObject.class);
+        String tokenFromBody = body.has("token") ? body.get("token").getAsString() : null; // Session token from player
+        String botIdentifier = body.has("bot_name") ? body.get("bot_name").getAsString() : null;
+
+        if (tokenFromBody == null || botIdentifier == null || botIdentifier.isEmpty()) {
+          sendResponse(exchange, 400, "{\"success\":false, \"error\":\"Missing session token or bot_name\"}");
+          return;
+        }
+
+        UUID ownerUuid = plugin.validateProfileSessionToken(tokenFromBody);
+        if (ownerUuid == null) {
+          sendResponse(exchange, 401, "{\"error\":\"Invalid or expired session token\"}");
+          return;
+        }
+
+        // Resolve bot_uuid from identifier on the main Bukkit thread
+        Future<UUID> futureBotUuid = Bukkit.getScheduler().callSyncMethod(plugin, () -> 
+            UUID.nameUUIDFromBytes(("Bot-" + botIdentifier).getBytes(StandardCharsets.UTF_8)) // Deterministic UUID generation
+        );
+        UUID botUuid = futureBotUuid.get();
+
+        // Ensure the resolved bot is actually a bot and owned by the requesting player
+        UUID actualOwnerUuid = plugin.getDatabaseManager().getBotOwner(botUuid);
+        if (actualOwnerUuid == null || !actualOwnerUuid.equals(ownerUuid)) {
+          sendResponse(exchange, 400, "{\"success\":false, \"error\":\"Bot not found or not owned by you\"}");
+          return;
+        }
+
+        // Delete the bot
+        plugin.getDatabaseManager().deleteBot(botUuid);
+        
+        sendResponse(exchange, 200, "{\"success\":true, \"message\":\"Bot " + botIdentifier + " unbound successfully\"}");
+      } catch (Exception e) {
+        plugin.getLogger().log(Level.SEVERE, "Error during bot unbind operation", e);
         sendResponse(exchange, 500, "{\"error\":\"Internal server error\"}");
       }
     }

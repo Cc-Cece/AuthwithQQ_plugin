@@ -1,81 +1,59 @@
 # AuthWithQq Plugin - MC服务器QQ绑定认证插件
 
-AuthWithQq是一款功能强大的Minecraft服务器插件，旨在提供玩家QQ绑定认证、假人自动化支持、实时服务器监控以及便捷的Web管理工具。该插件通过内置的轻量级HTTP服务器，提供了一套完整的Web界面和API接口，帮助服务器管理员更高效地管理玩家和服务器状态。
+AuthWithQq是一款多功能的Minecraft服务器插件，旨在提供玩家QQ绑定认证。该插件通过内置的轻量级HTTP服务器，提供了一套完整的Web界面和API接口，帮助服务器管理员更高效地管理玩家和服务器状态。
+
+### 🚀 快速开始
+
+1. **下载插件**：前往 [Releases](https://github.com/Cc-Cece/AuthwithQQ_plugin/releases/tag/dev) 页面下载最新版本的 `AuthWithQq-xx.xx-SNAPSHOT.jar`。
+2. **安装插件**：将下载的 JAR 文件放入 Minecraft 服务器根目录下的 `plugins` 文件夹中。
+3. **启动服务器**：启动（或重启）服务器以生成默认配置文件。
+4. **配置插件**：编辑 `plugins/AuthWithQq/config.yml`，设置您的 HTTP 端口、API Token 以及 QQ 绑定逻辑。
+5. **应用配置**：在游戏内执行 `/auth reload` 指令重载配置，无需重启服务器。
+6. **开始绑定**：玩家进入游戏后输入 即可看到提示，使用QQ机器人或访问 Web 页面完成认证。
+
+### ⚙️ 兼容性
+
+- **服务端版本**：原生支持 **Minecraft 1.20.x - 1.21.x**。(其它版本自行测试)
+- **服务端核心**：完美支持 **Paper** ；兼容 **Spigot**, **Bukkit** 环境。
+- **运行环境**：需要 **Java 21** 或更高版本。
+- **向下兼容**：若需在 1.20 以下的旧版本（如 1.12.2 或 1.16.5）运行，可能需要降低源码中的 API 版本并重新构建（Build）。
 
 ## ✨ 主要功能
 
 *   **QQ绑定认证**：玩家需绑定QQ才能进入游戏或解除游客限制。
-*   **Web认证页面**：提供LP风格的Web认证页面，支持自定义字段，方便玩家通过浏览器完成绑定。
-*   **实时服务器看板**：通过Web界面实时监控服务器TPS、内存使用和在线玩家列表。
-*   **轻量化管理员管理台**：Web管理界面，支持API Token认证，方便管理员查看玩家绑定信息、强制解绑、管理白名单和假人，并查看插件配置。
+*   **Web认证页面**：提供Web认证页面（可选），支持自定义字段，方便玩家通过浏览器完成绑定。
+*   **实时服务器看板**：简单的Web界面实时监控服务器TPS、内存使用和在线玩家列表。
+*   **轻量化管理员管理台**：Web管理界面，方便管理员查看玩家绑定信息、强制解绑、管理白名单和假人。
 *   **智能验证拦截**：灵活的验证逻辑，支持白名单、OP玩家跳过认证，以及假人自动放行。
 *   **多账号绑定限制**：配置单个QQ号可绑定的MC账号数量，有效防止一人多开。
-*   **假人自动化支持**：完美兼容Citizens等假人插件，自动识别NPC并免除验证。
-*   **增强的管理员指令**：提供 `/auth` 指令扩展，支持白名单管理、强制绑定和假人绑定。
+*   **假人自动化支持**：兼容Fakeplayer等假人插件，自动识别NPC并免除验证。
+*   **增强的指令系统**：提供 `/auth` (管理员) 和 `/bind` (玩家) 两套指令系统，覆盖绑定、管理、假人操作等全流程。
 *   **开放API接口**：为外部应用或自定义脚本提供绑定、查询、管理等API接口。
 
 ## ⚙️ 配置 (`config.yml`)
 
-插件的配置全部集中在 `config.yml` 中，提供了高度的自定义性。
-
-```yaml
-binding:
-  code-length: 6 # 整数，默认 6。支持生成 4-8 位的数字验证码。
-  code-expiration: 300 # 整数，单位秒，默认 300 (5分钟)。验证码的过期时间。
-  custom-fields: # 自定义字段，用于前端认证页面动态生成输入框
-    - name: "school"
-      type: "text"
-      label: "学校"
-      required: true
-    - name: "major"
-      type: "text"
-      label: "专业"
-      required: false
-  max-accounts-per-qq: 1 # 整数，默认 1。一个QQ号允许绑定的MC账号数量。
-  max-bots-per-player: 0 # 整数，默认 0。每个真实玩家允许绑定的假人数量。
-
-whitelist:
-  players: [] # 字符串列表，玩家ID。列表中的玩家无需绑定即可进入游戏。
-  bypass-ops: true # 布尔值，默认 true。OP是否自动跳过验证。
-
-server:
-  port: 8081
-  token: "changeme" # !!! 重要：请务必修改此Token，用于Web API认证
-
-guest-mode:
-  allow-move: true
-  allow-interact: false
-  allow-world-change: false
-  gamemode: "SURVIVAL"
-  potion-effects:
-    - type: BLINDNESS
-      level: 0
-  allowed-commands:
-    - "/login"
-    - "/register"
-    - "/bind"
-  allow-fake-players: false # 布尔值，默认 false。如果为 true，则假人（NPC）将自动跳过验证。
-
-messages: # 插件消息模板
-  guest-join: "&c请加入QQ群 123456 发送 /绑定 %code% 进行验证"
-  success: "&a验证成功，祝你游戏愉快！"
-  already-bound: "&e你已经绑定过了！"
-  bind-prompt: "&6请输入 /绑定 <验证码> 以完成绑定。"
-  world-change-denied: "&c未验证无法离开当前世界！"
-  welcome: "&a欢迎回来, %player%!"
-```
+插件的配置、消息提示等全部集中在 `config.yml` 中，高度自定义并可更方便地翻译。
 
 ## 🌐 Web界面使用
 
 插件内置HTTP服务器，您可以通过浏览器访问以下地址：
 
-*   **玩家认证页面**：`http://[服务器IP]:[端口]/web/auth.html?uuid=xxx&name=xxx`
+*   **玩家认证页面**(可配置绑定时自动发送)：`http://[服务器IP]:[端口]/web/auth.html?uuid=xxx&name=xxx`
     *   **示例**：`http://yourserver.com:8081/web/auth.html?uuid=a1b2c3d4-e5f6-7890-1234-567890abcdef&name=Steve`
-*   **实时服务器看板 (Dashboard)**：`http://[服务器IP]:[端口]/dashboard` 或 `http://[服务器IP]:[端口]/`
+*   **简单的实时服务器看板 (Dashboard)**：`http://[服务器IP]:[端口]/dashboard` 
     *   **示例**：`http://yourserver.com:8081/dashboard`
 *   **管理员管理台 (Admin Console)**：`http://[服务器IP]:[端口]/admin`
     *   **示例**：`http://yourserver.com:8081/admin`
     *   访问时会提示输入API Token，或在URL中带上 `?token=YOUR_API_TOKEN`。
+
+## 💻 玩家指令 (`/bind`)
+
+普通玩家可使用以下指令进行操作：
+
+*   `/bind getcode`：获取当前的绑定验证码。
+*   `/bind profile`：获取个人资料页面的链接，可用于查看绑定信息。
+*   `/bind bot add <假人名>`：将一个假人绑定到自己的名下（需配置 `max-bots-per-player` > 0）。
+*   `/bind bot remove <假人名>`：解绑自己名下的假人。
 
 ## 🛠️ 管理员指令 (`/auth`)
 
@@ -87,11 +65,12 @@ messages: # 插件消息模板
 *   `/auth whitelist add <玩家名>`：将玩家添加到白名单。
 *   `/auth whitelist remove <玩家名>`：将玩家从白名单移除。
 *   `/auth bind <玩家名> <QQ号>`：强制为指定玩家绑定QQ。
-*   `/auth bot add <所有者玩家名> <假人名>`：为指定玩家绑定一个假人名额。
+*   `/auth unbind <玩家名>`：强制解绑指定玩家。
+*   `/auth bot add <所有者玩家名> <假人名>`：强制为指定玩家绑定一个假人名额。
 
 ## 🔌 API 参考
 
-插件提供了RESTful API接口，方便与其他系统集成。所有API请求都需要在请求头中包含 `X-API-Token` 进行认证。API Token可在 `config.yml` 中配置。
+插件提供了RESTful API接口，方便与其他代码集成。
 
 ### 认证头 (`X-API-Token`)
 
@@ -274,6 +253,34 @@ messages: # 插件消息模板
     }
     ```
 
+#### 8. `POST /api/bot/unbind` - 解绑假人
+
+*   **描述**：解绑指定玩家名下的假人。
+*   **认证**：需要 `X-API-Token`。
+*   **请求体 (application/json)**：
+    ```json
+    {
+      "owner_uuid": "a1b2c3d4-e5f6-7890-1234-567890abcdef",
+      "bot_name": "MyBotName"
+    }
+    ```
+    *   `owner_uuid`: 假人所有者的UUID（用于验证权限）。
+    *   `bot_name`: 假人的名称。
+*   **响应示例 (200 OK)**：
+    ```json
+    {
+      "success": true,
+      "message": "Bot MyBotName unbound successfully"
+    }
+    ```
+*   **响应示例 (400 Bad Request)**：
+    ```json
+    {
+      "success": false,
+      "error": "Bot not found or not owned by you"
+    }
+    ```
+
 ---
 
 ## 🏗️ 构建与部署
@@ -289,7 +296,3 @@ messages: # 插件消息模板
 ## 🤝 贡献
 
 欢迎通过Pull Request或Issue的形式对插件进行改进和建议。
-
----
-
-**更新这个README！ ;)**

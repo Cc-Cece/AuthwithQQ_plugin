@@ -1,7 +1,7 @@
 binding:
   code-length: 6 # 整数，默认 6。支持生成 4-8 位的数字验证码。
   code-expiration: 300 # 整数，单位秒，默认 300 (5分钟)。验证码的过期时间。
-  custom-fields: # 自定义字段，用于前端认证页面动态生成输入框
+  custom-fields: # 自定义字段，不强制，仅用于某些特殊情况，无需请把示例删除
     - name: "school"
       type: "text"
       label: "学校"
@@ -19,9 +19,9 @@ whitelist:
   bypass-ops: true # 布尔值，默认 true。OP是否自动跳过验证。
 
 server:
-  port: 8081
-  token: "changeme"
-  external-address: "127.0.0.1" # 用于玩家通过网页绑定时的外部访问地址。例如：example.com 或 123.45.67.89。如果留空或不配置，默认使用127.0.0.1。
+  port: 8081 # 整数，默认 8081。服务器监听端口。如果使用了端口转发等工具，建议把该值和远程端口保持一致，避免构造出错误的访问链接。
+  token: "changeme" # 字符串，默认 "changeme"。服务器验证令牌，请务必修改为一个安全的随机字符串。
+  external-address: "127.0.0.1" # 用于玩家通过网页绑定时的外部访问地址。例如：example.com 或 123.45.67.89。如果留空或不配置，默认使用127.0.0.1。仅用于构造访问链接，不影响服务器实际监听的地址。
 
 guest-mode:
   allow-move: true # 布尔值，默认 true。如果为 false，则给予玩家 SLOW (等级 255) 和 JUMP (等级 128) 药水效果以禁止移动和跳跃。
@@ -90,6 +90,12 @@ messages:
     not-bound: "&c玩家 %player% 尚未绑定QQ，无法修改资料。请先绑定！"
     profile-link-prefix: "&a点击此处修改您的绑定资料: "
     web-bind-only: "&c由于安全原因，玩家绑定功能现在只能通过网页进行。请使用 /bind getcode 获取链接。"
+    bot: # Player bot commands
+      owner-not-bound: "&c你尚未绑定QQ，无法添加假人。请先绑定你的QQ！"
+      limit-reached: "&c你已达到假人绑定上限 (%limit%)。"
+      add-success: "&a假人 %bot_name% 已成功绑定到你的账号。"
+      remove-not-owned: "&c假人 %bot_name% 不是你的，或者不存在。"
+      remove-success: "&a假人 %bot_name% 已成功解除绑定。"
 
   # GuestListener Messages
   guest:
