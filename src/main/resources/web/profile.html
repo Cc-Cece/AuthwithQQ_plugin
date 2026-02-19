@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>修改个人资料</title>
+    <link rel="stylesheet" href="profile.css">
+</head>
+<body>
+    <div class="container">
+        <h1>修改个人资料</h1>
+        <p>在此修改您的绑定信息。</p>
+        <form id="profileForm">
+            <input type="hidden" id="token" name="token">
+            <input type="hidden" id="uuid" name="uuid">
+
+            <div class="form-group">
+                <label for="playerName">玩家名:</label>
+                <input type="text" id="playerName" name="playerName" readonly>
+            </div>
+
+            <div class="form-group">
+                <label for="currentQq">当前QQ:</label>
+                <input type="number" id="currentQq" name="currentQq" readonly>
+            </div>
+
+            <div class="form-group">
+                <label for="newQq">新QQ号 (留空则不修改):</label>
+                <input type="number" id="newQq" name="newQq">
+            </div>
+
+            <!-- Custom fields will be injected here by JavaScript -->
+            <div id="customFieldsContainer"></div>
+
+            <button type="submit" class="btn">保存修改</button>
+            <p id="message" class="message"></p>
+        </form>
+        <div id="loading" class="loading" style="display: none;">加载中...</div>
+    </div>
+    <script src="profile.js"></script>
+</body>
+</html>

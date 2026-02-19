@@ -2,6 +2,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const authForm = document.getElementById('authForm');
     const uuidInput = document.getElementById('uuid');
     const nameInput = document.getElementById('name');
+    const verificationCodeInput = document.getElementById('verificationCode'); // ADDED
     const customFieldsContainer = document.getElementById('customFieldsContainer');
     const messageElement = document.getElementById('message');
 
@@ -55,13 +56,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const formData = new FormData(authForm);
         const data = {
             uuid: formData.get('uuid'),
+            code: formData.get('code'), // ADDED: Get the numeric verification code
             qq: parseInt(formData.get('qq')),
             meta: {}
         };
 
         // Collect custom field data
         customFieldsContainer.querySelectorAll('input').forEach(input => {
-            if (input.name !== 'uuid' && input.name !== 'qq' && input.name !== 'name') {
+            // Ensure not to overwrite 'code' or 'uuid' from form data
+            if (input.name !== 'uuid' && input.name !== 'qq' && input.name !== 'name' && input.name !== 'code') {
                 data.meta[input.name] = input.value;
             }
         });

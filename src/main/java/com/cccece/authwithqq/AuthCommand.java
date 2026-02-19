@@ -205,6 +205,7 @@ public class AuthCommand implements CommandExecutor, TabCompleter {
       }
 
       plugin.getDatabaseManager().updateBinding(playerUuid, qq);
+      plugin.handleBindingChange(playerUuid, qq); // Update player's guest status
       sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.bind.force-bind-success", new HashMap<String, String>() {{ put("%player%", playerName); put("%uuid%", playerUuid.toString()); put("%qq%", String.valueOf(qq)); }}));
     });
   }
@@ -270,7 +271,7 @@ public class AuthCommand implements CommandExecutor, TabCompleter {
       Player onlinePlayer = Bukkit.getPlayer(playerUuid);
       if (onlinePlayer != null) {
         onlinePlayer.sendMessage(plugin.getMessageManager().getMessage("messages.auth.unbind.success", new HashMap<String, String>() {{ put("%player%", playerName); }}));
-        plugin.handleBindingSuccess(playerUuid); // This will unmark guest, clear effects etc.
+        plugin.handleBindingChange(playerUuid, 0L); // This will mark them as guest if online
       }
 
       sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.unbind.success", new HashMap<String, String>() {{ put("%player%", playerName); }}));

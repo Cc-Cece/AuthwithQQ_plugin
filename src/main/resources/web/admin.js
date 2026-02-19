@@ -132,4 +132,63 @@ document.addEventListener('DOMContentLoaded', () => {
     // Initial load
     fetchPlayers();
     fetchConfig();
+
+    // --- Handle Add/Modify Binding Form ---
+    const bindForm = document.getElementById('bindForm');
+    const playerIdentifierInput = document.getElementById('playerIdentifier');
+    const qqNumberInput = document.getElementById('qqNumber');
+    const bindMessage = document.getElementById('bind-message');
+
+    if (bindForm) {
+        bindForm.addEventListener('submit', (event) => {
+            event.preventDefault(); // Prevent default form submission
+
+            const playerIdentifier = playerIdentifierInput.value.trim();
+            const qqNumber = qqNumberInput.value.trim();
+
+            if (!playerIdentifier || !qqNumber) {
+                bindMessage.textContent = '玩家标识符和QQ号码不能为空。';
+                bindMessage.style.color = 'red';
+                return;
+            }
+
+            if (isNaN(qqNumber) || parseInt(qqNumber) <= 0) {
+                bindMessage.textContent = 'QQ号码必须是有效的正整数。';
+                bindMessage.style.color = 'red';
+                return;
+            }
+
+            fetch('/api/admin/bind', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-API-Token': apiToken
+                },
+                body: JSON.stringify({ playerIdentifier: playerIdentifier, qq: parseInt(qqNumber) })
+            })
+            .then(response => {
+                if (response.status === 401) {
+                    throw new Error('Unauthorized. 请检查您的 API Token。');
+                }
+                return response.json();
+            })
+            .then(result => {
+                if (result.success) {
+                    bindMessage.textContent = result.message || `玩家 ${playerIdentifier} 已成功绑定到 QQ ${qqNumber}。`;
+                    bindMessage.style.color = 'green';
+                    playerIdentifierInput.value = ''; // Clear form
+                    qqNumberInput.value = '';
+                    fetchPlayers(); // Refresh the players list
+                } else {
+                    bindMessage.textContent = `绑定失败: ${result.error || '未知错误'}`;
+                    bindMessage.style.color = 'red';
+                }
+            })
+            .catch(error => {
+                console.error('Error adding/modifying binding:', error);
+                bindMessage.textContent = `操作失败: ${error.message}`;
+                bindMessage.style.color = 'red';
+            });
+        });
+    }
 });

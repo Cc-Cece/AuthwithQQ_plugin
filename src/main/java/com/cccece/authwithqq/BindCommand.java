@@ -5,7 +5,9 @@ import java.util.UUID; // Added for UUID handling
 import java.util.Map; // Added for MessageManager
 import com.cccece.authwithqq.util.MessageManager;
 import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.event.ClickEvent; // ADDED
+import net.kyori.adventure.text.format.NamedTextColor; // ADDED
+import net.kyori.adventure.text.format.TextDecoration; // ADDED
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
@@ -39,52 +41,44 @@ public class BindCommand implements CommandExecutor {
       return true;
     }
 
-    if (args.length < 2) {
-      sender.sendMessage(plugin.getMessageManager().getMessage("messages.bind-command.usage"));
+    // Handle /bind getcode command
+    if (args.length == 1 && args[0].equalsIgnoreCase("getcode")) {
+      long qq = plugin.getDatabaseManager().getQq(player.getUniqueId());
+      if (qq != 0) { // Player is already bound
+        player.sendMessage(plugin.getMessageManager().getMessage("messages.bind-command.already-bound-to-this-qq")); // Reusing this message for simplicity
+        return true;
+      }
+      plugin.getGuestListener().markGuest(player); // Resend the join prompt message with code/link
       return true;
     }
 
-    String code = args[0];
-    long qq;
-    try {
-      qq = Long.parseLong(args[1]);
-    } catch (NumberFormatException e) {
-      sender.sendMessage(plugin.getMessageManager().getMessage("messages.bind-command.invalid-qq", Map.of("%qq%", args[1])));
+    // Handle /bind profile command
+    if (args.length == 1 && args[0].equalsIgnoreCase("profile")) {
+      long qq = plugin.getDatabaseManager().getQq(player.getUniqueId());
+      if (qq == 0) { // Player is not bound
+        player.sendMessage(plugin.getMessageManager().getMessage("messages.bind-command.not-bound", Map.of("%player%", player.getName()))); // Needs new message config
+        return true;
+      }
+
+      String sessionToken = plugin.createProfileSessionToken(player.getUniqueId());
+      // Construct the web link for profile editing
+      String externalAddress = plugin.getConfig().getString("server.external-address", "127.0.0.1");
+      int port = plugin.getConfig().getInt("server.port", 8081);
+      String profileLink = String.format("http://%s:%d/web/profile.html?token=%s", externalAddress, port, sessionToken);
+
+      // Create clickable link component
+      Component clickableLink = Component.text(profileLink)
+                                         .color(NamedTextColor.BLUE)
+                                         .decorate(TextDecoration.UNDERLINED)
+                                         .clickEvent(ClickEvent.openUrl(profileLink));
+      
+      // Send message to player (needs new message config)
+      player.sendMessage(plugin.getMessageManager().getMessage("messages.bind-command.profile-link-prefix", Map.of("%link%", profileLink)).append(clickableLink)); // Needs new message config with prefix for link
       return true;
     }
 
-    // Check if player is already bound
-    long existingQq = plugin.getDatabaseManager().getQq(player.getUniqueId());
-    if (existingQq != 0 && existingQq == qq) {
-      sender.sendMessage(plugin.getMessageManager().getMessage("messages.bind-command.already-bound-to-this-qq"));
-      return true;
-    } else if (existingQq != 0 && existingQq != qq) {
-      sender.sendMessage(plugin.getMessageManager().getMessage("messages.bind-command.already-bound-to-other-qq"));
-      return true;
-    }
-
-    // Validate the code using the centralized manager
-    if (!plugin.isValidCode(code, player.getUniqueId())) {
-      sender.sendMessage(plugin.getMessageManager().getMessage("messages.bind-command.invalid-or-expired-code"));
-      return true;
-    }
-
-    // --- Multi-Account Binding Check (similar to Web API) ---
-    int maxAccountsPerQq = plugin.getConfig().getInt("binding.max-accounts-per-qq", 1);
-    int currentAccountCount = plugin.getDatabaseManager().getAccountCountByQq(qq);
-    if (currentAccountCount >= maxAccountsPerQq) {
-      sender.sendMessage(plugin.getMessageManager().getMessage("messages.bind-command.bind-limit-reached"));
-      return true;
-    }
-    // --- END Multi-Account Binding Check ---
-
-    // Perform binding and invalidate code
-    plugin.getDatabaseManager().updateBinding(player.getUniqueId(), qq);
-    plugin.invalidateCode(player.getUniqueId()); // Invalidate code after successful bind
-
-    // Notify plugin about binding (e.g., clear guest status)
-    plugin.handleBindingSuccess(player.getUniqueId()); // This will unmark guest, send success messages
-
+    // All in-game binding logic is removed, players must bind via web
+    sender.sendMessage(plugin.getMessageManager().getMessage("messages.bind-command.web-bind-only")); // New message config
     return true;
   }
 }

@@ -11,7 +11,9 @@ import java.util.Objects;
 import java.security.SecureRandom; // Placed after java.util.Objects for CustomImportOrder
 import java.util.UUID;
 import com.cccece.authwithqq.util.MessageManager;
+import org.bukkit.Bukkit;
 import org.bukkit.command.PluginCommand;
+import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
@@ -47,7 +49,7 @@ public class AuthWithQqPlugin extends JavaPlugin {
         getLogger());
 
     // Initialize CsvManager
-    csvManager = new CsvManager(databaseManager, getLogger());
+    csvManager = new CsvManager(this, databaseManager, getLogger());
 
     // Initialize Listeners
     guestListener = new GuestListener(this);
@@ -119,12 +121,42 @@ public class AuthWithQqPlugin extends JavaPlugin {
   }
 
   /**
+   * Gets the GuestListener instance.
+   *
+   * @return The GuestListener.
+   */
+  public GuestListener getGuestListener() {
+    return guestListener;
+  }
+
+  /**
    * Handles successful binding from the web API.
    *
    * @param uuid The player's UUID.
    */
   public void handleBindingSuccess(UUID uuid) {
     guestListener.unmarkGuest(uuid);
+  }
+
+  /**
+   * Handles changes in binding status for an online player, updating their guest status accordingly.
+   * This method should be called on the main server thread.
+   *
+   * @param uuid The player's UUID.
+   * @param newQq The new QQ number (0 for unbound).
+   */
+  public void handleBindingChange(UUID uuid, long newQq) {
+    // Schedule on main thread to interact with Bukkit API
+    getServer().getScheduler().runTask(this, () -> {
+      Player player = getServer().getPlayer(uuid);
+      if (player != null) { // Only update status for online players
+        if (newQq == 0) { // Unbound
+          guestListener.markGuest(player);
+        } else { // Bound
+          guestListener.unmarkGuest(uuid);
+        }
+      }
+    });
   }
 
   /**
@@ -227,5 +259,74 @@ public class AuthWithQqPlugin extends JavaPlugin {
   public void invalidateCode(UUID uuid) {
     playerVerificationCodes.remove(uuid);
   }
-}
 
+  // --- Profile Session Token Management ---
+  private final Map<String, ProfileSessionTokenEntry> playerProfileSessionTokens = new HashMap<>(); // Token -> Entry
+  private final Map<UUID, String> playerToTokenMap = new HashMap<>(); // Player UUID -> Token for quick lookup
+
+  // Inner class to hold profile session token and its generation timestamp
+  private static class ProfileSessionTokenEntry {
+    final UUID uuid;
+    final String token;
+    final long timestamp;
+
+    ProfileSessionTokenEntry(UUID uuid, String token, long timestamp) {
+      this.uuid = uuid;
+      this.token = token;
+      this.timestamp = timestamp;
+    }
+  }
+
+  /**
+   * Generates a new, time-limited session token for a player to access their web profile.
+   * Invalidates any existing token for this player.
+   *
+   * @param uuid The player's UUID.
+   * @return The generated session token string.
+   */
+  public String createProfileSessionToken(UUID uuid) {
+    // Invalidate any existing token for this player
+    String existingToken = playerToTokenMap.remove(uuid);
+    if (existingToken != null) {
+      playerProfileSessionTokens.remove(existingToken);
+    }
+
+    int tokenExpiration = getConfig().getInt("binding.profile-token-expiration", 300); // Default 300 seconds
+    String token = UUID.randomUUID().toString(); // Generate a random UUID as token
+
+    playerProfileSessionTokens.put(token, new ProfileSessionTokenEntry(uuid, token, System.currentTimeMillis()));
+    playerToTokenMap.put(uuid, token); // Store reverse mapping
+
+    // Schedule task to remove token after expiration
+    getServer().getScheduler().runTaskLater(this, () -> {
+      ProfileSessionTokenEntry entry = playerProfileSessionTokens.get(token);
+      if (entry != null && entry.uuid.equals(uuid)) { // Ensure it's the same token
+        playerProfileSessionTokens.remove(token);
+        playerToTokenMap.remove(uuid);
+        getLogger().info("Profile session token for " + uuid + " expired and removed.");
+      }
+    }, tokenExpiration * 20L); // 20 ticks per second
+
+    return token;
+  }
+
+  /**
+   * Validates a profile session token and returns the associated player UUID if valid and not expired.
+   * The token is considered single-use and is invalidated after a successful validation.
+   *
+   * @param token The session token string.
+   * @return The UUID of the player associated with the token, or null if invalid or expired.
+   */
+  public UUID validateProfileSessionToken(String token) {
+    int tokenExpiration = getConfig().getInt("binding.profile-token-expiration", 300); // Default 300 seconds
+    ProfileSessionTokenEntry entry = playerProfileSessionTokens.get(token);
+
+    if (entry != null && (System.currentTimeMillis() - entry.timestamp) < (tokenExpiration * 1000L)) {
+      // Token is valid, remove it after first use for security (single-use)
+      playerProfileSessionTokens.remove(token);
+      playerToTokenMap.remove(entry.uuid);
+      return entry.uuid;
+    }
+    return null;
+  }
+}

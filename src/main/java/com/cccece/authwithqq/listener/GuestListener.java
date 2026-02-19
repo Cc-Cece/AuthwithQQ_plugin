@@ -10,6 +10,9 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.event.ClickEvent; // ADDED
+import net.kyori.adventure.text.format.NamedTextColor; // ADDED
+import net.kyori.adventure.text.format.TextDecoration; // ADDED
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import net.kyori.adventure.title.Title;
 import org.bukkit.GameMode;
@@ -63,7 +66,7 @@ public class GuestListener implements Listener {
     UUID uuid = event.getPlayer().getUniqueId();
     guestCache.remove(uuid);
     originalGameModes.remove(uuid);
-    plugin.invalidateCode(uuid); // Invalidate code from centralized manager on quit
+    // plugin.invalidateCode(uuid); // Invalidate code from centralized manager on quit
   }
 
   /**
@@ -109,55 +112,7 @@ public class GuestListener implements Listener {
         // --- END NEW LOGIC ---
 
         if (qq == 0) {
-          guestCache.add(uuid);
-          
-          // Store original game mode
-          originalGameModes.put(uuid, player.getGameMode());
-
-          // Apply configured game mode
-          String configuredGameMode = plugin.getConfig().getString("guest-mode.gamemode", "SURVIVAL").toUpperCase();
-          try {
-            GameMode gm = GameMode.valueOf(configuredGameMode);
-            player.setGameMode(gm);
-          } catch (IllegalArgumentException e) {
-            plugin.getLogger().warning("Invalid game mode configured: " + configuredGameMode
-                + ". Defaulting to SURVIVAL for " + player.getName());
-            player.setGameMode(GameMode.SURVIVAL);
-          }
-
-          // Apply allow-move potion effects
-          boolean allowMove = plugin.getConfig().getBoolean("guest-mode.allow-move", true);
-          if (!allowMove) {
-            player.addPotionEffect(new PotionEffect(
-                PotionEffectType.SLOWNESS, Integer.MAX_VALUE, 255, false, false));
-            player.addPotionEffect(
-                new PotionEffect(PotionEffectType.JUMP_BOOST, Integer.MAX_VALUE,
-                    128, false, false));
-          }
-
-          // Apply custom potion effects
-          List<Map<?, ?>> customPotionEffects = plugin.getConfig().getMapList("guest-mode.potion-effects");
-          for (Map<?, ?> effectMap : customPotionEffects) {
-            try {
-              String typeName = (String) effectMap.get("type");
-              int level = (Integer) effectMap.get("level");
-              PotionEffectType effectType = PotionEffectType.getByName(typeName);
-              if (effectType != null) {
-                player.addPotionEffect(new PotionEffect(effectType, Integer.MAX_VALUE, level,
-                    false, false));
-              } else {
-                plugin.getLogger().warning("Invalid potion effect type configured: " + typeName);
-              }
-            } catch (Exception e) {
-              plugin.getLogger().warning("Error parsing custom potion effect: "
-                  + effectMap.toString() + " - " + e.getMessage());
-            }
-          }
-
-          // Generate and store verification code with expiration logic
-          String verificationCode = plugin.getOrCreateCode(uuid); // Use centralized manager
-
-          player.sendMessage(plugin.getMessageManager().getMessage("messages.guest.join-prompt", Map.of("%code%", verificationCode)));
+          markGuest(player); // Call the new markGuest method
         } else {
           // Player is bound, clear any existing guest status
           unmarkGuest(uuid); // Ensure any lingering effects are removed
@@ -165,6 +120,116 @@ public class GuestListener implements Listener {
         }
       });
     });
+  }
+
+  /**
+   * Marks an online player as a guest, applying all necessary restrictions.
+   * This method should only be called on the main server thread.
+   *
+   * @param player The player to mark as guest.
+   */
+  public void markGuest(Player player) {
+    UUID uuid = player.getUniqueId();
+    guestCache.add(uuid);
+    
+    // Store original game mode
+    originalGameModes.put(uuid, player.getGameMode());
+
+    // Apply configured game mode
+    String configuredGameMode = plugin.getConfig().getString("guest-mode.gamemode", "SURVIVAL").toUpperCase();
+    try {
+      GameMode gm = GameMode.valueOf(configuredGameMode);
+      player.setGameMode(gm);
+    } catch (IllegalArgumentException e) {
+      plugin.getLogger().warning("Invalid game mode configured: " + configuredGameMode
+          + ". Defaulting to SURVIVAL for " + player.getName());
+      player.setGameMode(GameMode.SURVIVAL);
+    }
+
+    // Apply allow-move potion effects
+    boolean allowMove = plugin.getConfig().getBoolean("guest-mode.allow-move", true);
+    if (!allowMove) {
+      player.addPotionEffect(new PotionEffect(
+          PotionEffectType.SLOWNESS, Integer.MAX_VALUE, 255, false, false));
+      player.addPotionEffect(
+          new PotionEffect(PotionEffectType.JUMP_BOOST, Integer.MAX_VALUE,
+              128, false, false));
+    }
+
+    // Apply custom potion effects
+    List<Map<?, ?>> customPotionEffects = plugin.getConfig().getMapList("guest-mode.potion-effects");
+    for (Map<?, ?> effectMap : customPotionEffects) {
+      try {
+        String typeName = (String) effectMap.get("type");
+        int level = (Integer) effectMap.get("level");
+        PotionEffectType effectType = PotionEffectType.getByName(typeName);
+        if (effectType != null) {
+          player.addPotionEffect(new PotionEffect(effectType, Integer.MAX_VALUE, level,
+              false, false));
+        } else {
+          plugin.getLogger().warning("Invalid potion effect type configured: " + typeName);
+        }
+      } catch (Exception e) {
+        plugin.getLogger().warning("Error parsing custom potion effect: "
+            + effectMap.toString() + " - " + e.getMessage());
+      }
+    }
+
+    // Generate and store verification code with expiration logic
+    String verificationCode = plugin.getOrCreateCode(uuid); // Use centralized manager
+
+    // Construct the web link for binding, including UUID and name for authentication context
+    String externalAddress = plugin.getConfig().getString("server.external-address", "127.0.0.1");
+    int port = plugin.getConfig().getInt("server.port", 8081);
+    String webLink = String.format("http://%s:%d/web/auth.html?uuid=%s&name=%s", externalAddress, port, uuid.toString(), player.getName());
+
+    // Determine how to display verification information based on config
+    String displayMethod = plugin.getConfig().getString("guest-mode.verification-display-method", "BOTH").toUpperCase();
+
+    // Prepare message components
+    Component codeComponent = Component.text(verificationCode);
+    Component clickableWebLinkComponent = Component.text(webLink)
+                                                .color(NamedTextColor.BLUE) // Make link blue
+                                                .decorate(TextDecoration.UNDERLINED) // Underline link
+                                                .clickEvent(ClickEvent.openUrl(webLink)); // Make it clickable
+
+    Component finalMessageComponent = Component.empty();
+    String baseMessageTemplate = plugin.getConfig().getString("messages.guest.join-prompt", "&6请绑定您的QQ，验证码：%code%。请访问 %web_link% 进行绑定。");
+
+    // Manually construct the message Component based on displayMethod
+    if ("CODE_ONLY".equals(displayMethod)) {
+        // Remove web_link part from message template
+        String processedTemplate = baseMessageTemplate.replace("。请访问 %web_link% 进行绑定。", "");
+        finalMessageComponent = plugin.getMessageManager().getMessage(processedTemplate, Map.of("%code%", verificationCode));
+    } else if ("WEB_ONLY".equals(displayMethod)) {
+        // Remove code part from message template
+        String processedTemplate = baseMessageTemplate.replace("，验证码：%code%", "");
+        // Use a simple split and append to insert the clickable component
+        String[] parts = processedTemplate.split("%web_link%", 2); // Split only once
+        if (parts.length > 0) {
+            finalMessageComponent = serializer.deserialize(parts[0]);
+        }
+        finalMessageComponent = finalMessageComponent.append(clickableWebLinkComponent);
+        if (parts.length > 1) {
+            finalMessageComponent = finalMessageComponent.append(serializer.deserialize(parts[1]));
+        }
+    } else { // "BOTH" or unknown
+        // Construct full message with both code and clickable link
+        String[] parts = baseMessageTemplate.split("%code%", 2);
+        finalMessageComponent = serializer.deserialize(parts[0]).append(codeComponent);
+        
+        if (parts.length > 1) {
+            String[] parts2 = parts[1].split("%web_link%", 2);
+            finalMessageComponent = finalMessageComponent
+                .append(serializer.deserialize(parts2[0]))
+                .append(clickableWebLinkComponent);
+            if (parts2.length > 1) {
+                finalMessageComponent = finalMessageComponent.append(serializer.deserialize(parts2[1]));
+            }
+        }
+    }
+    
+    player.sendMessage(finalMessageComponent);
   }
 
   /**

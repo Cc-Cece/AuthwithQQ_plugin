@@ -2,6 +2,7 @@ package com.cccece.authwithqq.web;
 
 import com.cccece.authwithqq.AuthWithQqPlugin;
 import com.google.gson.Gson;
+import com.google.gson.JsonArray; // ADDED
 import com.google.gson.JsonObject;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
@@ -63,6 +64,9 @@ public class InternalWebServer {
       server.createContext("/api/unbind", new UnbindHandler()); // API for unbinding players
       server.createContext("/api/config", new ConfigHandler()); // API for plugin configuration
       server.createContext("/api/bot/bind", new BotBindHandler()); // New: API for binding fake players
+      server.createContext("/api/admin/bind", new AdminBindHandler()); // New: API for admin binding operations
+      server.createContext("/api/profile", new ProfileViewHandler()); // New: API for viewing player profile
+      server.createContext("/api/profile/update", new ProfileUpdateHandler()); // New: API for updating player profile
       server.createContext("/", new RedirectHandler("/web/dashboard.html")); // Redirect to dashboard
       server.createContext("/dashboard", new RedirectHandler("/web/dashboard.html")); // Explicit dashboard route
       server.createContext("/admin", new AuthenticatedRedirectHandler("/web/admin.html")); // Admin console
@@ -169,9 +173,6 @@ public class InternalWebServer {
   private class BindHandler implements HttpHandler {
     @Override
     public void handle(HttpExchange exchange) throws IOException {
-      if (!authenticate(exchange)) {
-        return;
-      }
       if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
         sendResponse(exchange, 405, "Method not allowed");
         return;
@@ -180,19 +181,20 @@ public class InternalWebServer {
       try (BufferedReader reader = new BufferedReader(
           new InputStreamReader(exchange.getRequestBody(), StandardCharsets.UTF_8))) {
         JsonObject body = gson.fromJson(reader, JsonObject.class);
+        String playerUuidString = body.get("uuid").getAsString(); // Get actual player UUID
+        String numericVerificationCode = body.get("code").getAsString(); // Get numeric verification code
         long qq = body.get("qq").getAsLong();
-        String code = body.get("code").getAsString(); // UUID string in our case
         
         UUID uuid;
         try {
-          uuid = UUID.fromString(code);
+          uuid = UUID.fromString(playerUuidString); // Parse player UUID correctly
         } catch (IllegalArgumentException e) {
-          sendResponse(exchange, 400, "Invalid code (UUID expected)");
+          sendResponse(exchange, 400, "Invalid UUID format");
           return;
         }
 
-        // Validate the code using the centralized manager
-        if (!plugin.isValidCode(code, uuid)) {
+        // Validate the numeric verification code using the centralized manager
+        if (!plugin.isValidCode(numericVerificationCode, uuid)) {
           sendResponse(exchange, 400, "{\"success\":false, \"error\":\"验证码无效或已过期\"}");
           return;
         }
@@ -221,8 +223,8 @@ public class InternalWebServer {
           }
         }
 
-        // Notify plugin about binding
-        Bukkit.getScheduler().runTask(plugin, () -> plugin.handleBindingSuccess(uuid));
+        // Notify plugin about binding status change
+        Bukkit.getScheduler().runTask(plugin, () -> plugin.handleBindingChange(uuid, qq));
         
         sendResponse(exchange, 200, "{\"success\":true}");
       } catch (Exception e) {
@@ -426,7 +428,7 @@ public class InternalWebServer {
           if (player != null) {
             // Further actions like kicking the player, sending a message, etc.
             player.sendMessage("You have been unbound from QQ."); // Example
-            // plugin.unmarkGuest(uuid); // If unbinding means they become a guest again
+            plugin.handleBindingChange(uuid, 0L); // Update player's guest status
           }
         });
         
@@ -534,6 +536,162 @@ public class InternalWebServer {
       } catch (Exception e) {
         plugin.getLogger().log(Level.SEVERE, "Error serving static file: " + resourcePath, e);
         sendResponse(exchange, 500, "500 Internal Server Error");
+      }
+    }
+  }
+
+  private class AdminBindHandler implements HttpHandler {
+    @Override
+    public void handle(HttpExchange exchange) throws IOException {
+      if (!authenticate(exchange)) {
+        return;
+      }
+      if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+        sendResponse(exchange, 405, "Method not allowed");
+        return;
+      }
+
+      try (BufferedReader reader = new BufferedReader(
+          new InputStreamReader(exchange.getRequestBody(), StandardCharsets.UTF_8))) {
+        JsonObject body = gson.fromJson(reader, JsonObject.class);
+        String playerIdentifier = body.get("playerIdentifier").getAsString(); // Can be name or UUID
+        long qq = body.get("qq").getAsLong();
+
+        // Resolve playerIdentifier to UUID on the main Bukkit thread
+        Future<UUID> futureUuid = Bukkit.getScheduler().callSyncMethod(plugin, () -> {
+          UUID uuid = null;
+          try {
+            // Try parsing as UUID first
+            uuid = UUID.fromString(playerIdentifier);
+          } catch (IllegalArgumentException e) {
+            // If not a UUID, try getting player by name
+            Player player = Bukkit.getPlayer(playerIdentifier);
+            if (player != null) {
+              uuid = player.getUniqueId();
+            } else {
+              // Try getting offline player by name
+              // Note: getOfflinePlayer can be slow and might not return UUID if player never joined
+              org.bukkit.OfflinePlayer offlinePlayer = Bukkit.getOfflinePlayer(playerIdentifier);
+              if (offlinePlayer.hasPlayedBefore() || offlinePlayer.isOnline()) {
+                uuid = offlinePlayer.getUniqueId();
+              }
+            }
+          }
+          return uuid;
+        });
+
+        UUID playerUuid = futureUuid.get(); // Blocks until UUID is resolved
+
+        if (playerUuid == null) {
+          sendResponse(exchange, 400, "{\"success\":false, \"error\":\"Player not found or invalid identifier\"}");
+          return;
+        }
+
+        // Update binding
+        plugin.getDatabaseManager().updateBinding(playerUuid, qq);
+        
+        // Notify plugin about binding status change (e.g., clear guest status if online)
+        Bukkit.getScheduler().runTask(plugin, () -> plugin.handleBindingChange(playerUuid, qq));
+
+        sendResponse(exchange, 200, "{\"success\":true, \"message\":\"Binding updated successfully\"}");
+      } catch (Exception e) {
+        plugin.getLogger().log(Level.SEVERE, "Error during admin bind operation", e);
+        sendResponse(exchange, 500, "{\"error\":\"Internal server error\"}");
+      }
+    }
+  }
+
+  // New: Handles viewing player profile
+  private class ProfileViewHandler implements HttpHandler {
+    @Override
+    public void handle(HttpExchange exchange) throws IOException {
+      if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+        sendResponse(exchange, 405, "Method not allowed");
+        return;
+      }
+
+      Map<String, String> query = AuthWithQqPlugin.parseQuery(exchange.getRequestURI().getQuery());
+      String token = query.get("token");
+      if (token == null || token.isEmpty()) {
+        sendResponse(exchange, 400, "Missing session token");
+        return;
+      }
+
+      UUID uuid = plugin.validateProfileSessionToken(token);
+      if (uuid == null) {
+        sendResponse(exchange, 401, "{\"error\":\"Invalid or expired session token\"}");
+        return;
+      }
+
+      try {
+        Future<JsonObject> future = Bukkit.getScheduler().callSyncMethod(plugin, () -> {
+          JsonObject json = new JsonObject();
+          long qq = plugin.getDatabaseManager().getQq(uuid);
+          String name = plugin.getDatabaseManager().getNameByUuid(uuid);
+          Map<String, String> meta = plugin.getDatabaseManager().getAllMeta(uuid);
+          
+          json.addProperty("uuid", uuid.toString());
+          json.addProperty("name", name);
+          json.addProperty("qq", qq);
+
+          JsonObject metaJson = new JsonObject();
+          meta.forEach(metaJson::addProperty);
+          json.add("meta", metaJson);
+          return json;
+        });
+        JsonObject profileData = future.get();
+        sendResponse(exchange, 200, gson.toJson(profileData));
+      } catch (InterruptedException | ExecutionException e) {
+        plugin.getLogger().log(Level.SEVERE, "Error retrieving profile data", e);
+        sendResponse(exchange, 500, "{\"error\":\"Internal server error\"}");
+      }
+    }
+  }
+
+  // New: Handles updating player profile
+  private class ProfileUpdateHandler implements HttpHandler {
+    @Override
+    public void handle(HttpExchange exchange) throws IOException {
+      if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+        sendResponse(exchange, 405, "Method not allowed");
+        return;
+      }
+
+      try (BufferedReader reader = new BufferedReader(
+          new InputStreamReader(exchange.getRequestBody(), StandardCharsets.UTF_8))) {
+        JsonObject body = gson.fromJson(reader, JsonObject.class);
+        String token = body.get("token").getAsString();
+        if (token == null || token.isEmpty()) {
+          sendResponse(exchange, 400, "Missing session token");
+          return;
+        }
+
+        UUID uuid = plugin.validateProfileSessionToken(token);
+        if (uuid == null) {
+          sendResponse(exchange, 401, "{\"error\":\"Invalid or expired session token\"}");
+          return;
+        }
+
+        long newQq = body.get("qq").getAsLong();
+        JsonObject meta = body.getAsJsonObject("meta");
+
+        Future<Boolean> future = Bukkit.getScheduler().callSyncMethod(plugin, () -> {
+          plugin.getDatabaseManager().updateBinding(uuid, newQq); // Update QQ
+
+          // Update custom meta fields
+          for (Map.Entry<String, com.google.gson.JsonElement> entry : meta.entrySet()) {
+            plugin.getDatabaseManager().setMeta(uuid, entry.getKey(),
+                entry.getValue().getAsString());
+          }
+          plugin.handleBindingChange(uuid, newQq); // Update guest status if online
+          return true;
+        });
+        future.get(); // Wait for completion
+
+        sendResponse(exchange, 200, "{\"success\":true, \"message\":\"Profile updated successfully\"}");
+      } catch (Exception e) {
+        plugin.getLogger().log(Level.SEVERE, "Error updating profile", e);
+        sendResponse(exchange, 500, "{\"error\":\"Internal server error\"}");
       }
     }
   }

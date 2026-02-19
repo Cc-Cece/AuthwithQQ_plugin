@@ -1,5 +1,6 @@
 package com.cccece.authwithqq.util;
 
+import com.cccece.authwithqq.AuthWithQqPlugin; // ADDED
 import com.cccece.authwithqq.database.DatabaseManager;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -24,17 +25,20 @@ import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
  * Handles CSV export and import for player data.
  */
 public class CsvManager {
+  private final AuthWithQqPlugin plugin; // ADDED
   private final DatabaseManager databaseManager;
   private final Logger logger;
 
   /**
    * Initializes the CsvManager.
    *
+   * @param plugin The plugin instance. // ADDED
    * @param databaseManager The database manager.
    * @param logger The logger.
    */
   @SuppressFBWarnings(value = {"EI_EXPOSE_REP2"}, justification = "DatabaseManager and Logger instances are shared services, not meant for defensive copying.")
-  public CsvManager(DatabaseManager databaseManager, Logger logger) {
+  public CsvManager(AuthWithQqPlugin plugin, DatabaseManager databaseManager, Logger logger) { // MODIFIED
+    this.plugin = plugin; // ADDED
     this.databaseManager = databaseManager;
     this.logger = logger;
   }
@@ -111,6 +115,9 @@ public class CsvManager {
         // Update basic data
         databaseManager.addGuest(uuid, name);
         databaseManager.updateBinding(uuid, qq);
+        if (plugin != null) { // Ensure plugin is available
+          plugin.handleBindingChange(uuid, qq); // Update player's guest status
+        }
 
         // Update meta
         for (int i = 4; i < headers.length && i < values.length; i++) {

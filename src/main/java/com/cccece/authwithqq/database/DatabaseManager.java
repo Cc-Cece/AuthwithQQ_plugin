@@ -180,7 +180,7 @@ public class DatabaseManager {
         playerMap.put("Created", String.valueOf(rs.getLong("created_at")));
         
         // Fetch meta
-        Map<String, String> meta = getPlayerMeta(UUID.fromString(uuid));
+        Map<String, String> meta = getAllMeta(UUID.fromString(uuid));
         playerMap.putAll(meta);
         
         data.add(playerMap);
@@ -191,7 +191,13 @@ public class DatabaseManager {
     return data;
   }
 
-  private Map<String, String> getPlayerMeta(UUID uuid) {
+  /**
+   * Gets all metadata for a specific player UUID.
+   *
+   * @param uuid The player's UUID.
+   * @return A map of metadata key-value pairs.
+   */
+  public Map<String, String> getAllMeta(UUID uuid) {
     Map<String, String> meta = new HashMap<>();
     String sql = "SELECT meta_key, meta_value FROM player_meta WHERE uuid = ?";
     try (Connection conn = getConnection();

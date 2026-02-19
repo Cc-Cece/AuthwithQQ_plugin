@@ -12,6 +12,7 @@ binding:
       required: false
   max-accounts-per-qq: 1 # 整数，默认 1。一个QQ号允许绑定的MC账号数量。
   max-bots-per-player: 0 # 整数，默认 0。每个真实玩家允许绑定的假人数量。
+  profile-token-expiration: 300 # 整数，单位秒，默认 300 (5分钟)。玩家资料修改页面的会话令牌过期时间。
 
 whitelist:
   players: [] # 字符串列表，玩家ID。列表中的玩家无需绑定即可进入游戏。
@@ -20,20 +21,20 @@ whitelist:
 server:
   port: 8081
   token: "changeme"
+  external-address: "YOUR_SERVER_IP_OR_DOMAIN" # 用于玩家通过网页绑定时的外部访问地址。例如：example.com 或 123.45.67.89。如果留空或不配置，默认使用127.0.0.1。
 
 guest-mode:
   allow-move: true # 布尔值，默认 true。如果为 false，则给予玩家 SLOW (等级 255) 和 JUMP (等级 128) 药水效果以禁止移动和跳跃。
   allow-interact: false # 布尔值，默认 false。如果为 false，则监听并取消 PlayerInteractEvent (物理交互), EntityDamageByEntityEvent (攻击), PlayerDropItemEvent (丢弃), EntityPickupItemEvent (拾取)。
   allow-world-change: false # 布尔值，默认 false。如果为 false，则监听 PlayerTeleportEvent 和 PlayerPortalEvent。如果 event.getTo().getWorld() 与 event.getFrom().getWorld() 不同，则取消传送。
   gamemode: "SURVIVAL" # 字符串，默认 "SURVIVAL"。玩家进入游客模式时，强制设置为该游戏模式（如 ADVENTURE 或 SPECTATOR）。
-  potion-effects: # 列表。额外的负面效果配置（如 BLINDNESS）。支持配置效果类型和等级。
-    - type: BLINDNESS
-      level: 0 # (0-255)
+  potion-effects: [] # 列表。额外的负面效果配置（如 BLINDNESS）。支持配置效果类型和等级。
   allowed-commands:
     - "/login"
     - "/register"
     - "/bind"
   allow-fake-players: false # 布尔值，默认 false。如果为 true，则假人（NPC）将自动跳过验证。
+  verification-display-method: "BOTH" # 字符串，可选值："CODE_ONLY" (只发送验证码), "WEB_ONLY" (只发送网页链接), "BOTH" (两者都发送)。
 
 messages:
   # AuthCommand Messages
@@ -60,35 +61,39 @@ messages:
       player-not-found: "&c找不到玩家 %player%."
       invalid-qq: "&c无效的QQ号码: %qq%."
       force-bind-success: "&a已强制绑定玩家 %player% (%uuid%) 到 QQ %qq%."
-          bot:
-            owner-not-found: "&c找不到所有者玩家 %owner%."
-            owner-qq-not-bound: "&c所有者 %owner% 未绑定QQ，无法绑定假人。"
-            bot-limit-reached: "&c所有者 %owner% 已达到假人绑定上限 (%limit%)。"
-            add-success: "&a已绑定假人 %bot_name% (%bot_uuid%) 到所有者 %owner_name% (%owner_uuid%)。"
-          unbind:
-            usage: "&c用法: /auth unbind <player>"
-            player-not-found: "&c找不到玩家 %player%。"
-            success: "&a已解除玩家 %player% 的QQ绑定。"    help:
+    bot:
+      owner-not-found: "&c找不到所有者玩家 %owner%."
+      owner-qq-not-bound: "&c所有者 %owner% 未绑定QQ，无法绑定假人。"
+      bot-limit-reached: "&c所有者 %owner% 已达到假人绑定上限 (%limit%)。"
+      add-success: "&a已绑定假人 %bot_name% (%bot_uuid%) 到所有者 %owner_name% (%owner_uuid%)。"
+    unbind:
+      usage: "&c用法: /auth unbind <player>"
+      player-not-found: "&c找不到玩家 %player%。"
+      success: "&a已解除玩家 %player% 的QQ绑定。"
+    help:
       header: "&6--- AuthWithQq Admin Commands ---"
       reload: "&b/auth reload - 重载插件配置。"
       csv: "&b/auth csv <export|import> - 导出/导入玩家数据。"
       whitelist: "&b/auth whitelist <add|remove> <player> - 管理白名单玩家。"
       bind: "&b/auth bind <player> <qq> - 强制绑定玩家QQ。"
-            bot-add: "&b/auth bot add <owner> <bot_name> - 绑定假人到玩家。"
-          unbind: "&b/auth unbind <player> - 解除玩家QQ绑定。"
+      bot-add: "&b/auth bot add <owner> <bot_name> - 绑定假人到玩家。"
+      unbind: "&b/auth unbind <player> - 解除玩家QQ绑定。"
   # BindCommand Messages
   bind-command:
     player-only: "&cThis command is for players only."
-    usage: "&c用法: /bind <验证码> <QQ号码>"
+    usage: "&c用法: /bind getcode | profile"
     invalid-qq: "&c无效的QQ号码: %qq%."
     already-bound-to-this-qq: "&e你已经绑定到此QQ号码了。"
     already-bound-to-other-qq: "&c你已经绑定到其他QQ号码了，如需解绑请联系管理员。"
     invalid-or-expired-code: "&c验证码无效或已过期，请尝试重新加入游戏获取。"
     bind-limit-reached: "&c此QQ号码已达到绑定上限。"
+    not-bound: "&c玩家 %player% 尚未绑定QQ，无法修改资料。请先绑定！"
+    profile-link-prefix: "&a点击此处修改您的绑定资料: "
+    web-bind-only: "&c由于安全原因，玩家绑定功能现在只能通过网页进行。请使用 /bind getcode 获取链接。"
 
   # GuestListener Messages
   guest:
-    join-prompt: "&6请绑定您的QQ，验证码：%code%"
+    join-prompt: "&6请绑定您的QQ，验证码：%code%。请访问 %web_link% 进行绑定。"
     welcome: "&a欢迎回来, %player%!"
     world-change-denied: "&c未验证无法离开当前世界！"
     actionbar-prompt: "&6请输入 /bind <验证码> <QQ号码> 以完成绑定。"
