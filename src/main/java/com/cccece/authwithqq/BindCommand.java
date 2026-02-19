@@ -1,8 +1,10 @@
 package com.cccece.authwithqq;
 
-import java.util.Objects;
-import java.util.UUID; // Added for UUID handling
-import java.util.Map; // Added for MessageManager
+import java.util.ArrayList; // ADDED
+import java.util.Collections; // ADDED
+import java.util.HashMap; // ADDED
+import java.util.List; // ADDED
+import java.util.Map; // ADDED
 import com.cccece.authwithqq.util.MessageManager;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent; // ADDED
@@ -12,15 +14,17 @@ import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
+import org.bukkit.command.TabCompleter; // ADDED
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable; // Already present if I look at the whole file
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
 /**
  * Handles the in-game /bind command for players.
  */
-public class BindCommand implements CommandExecutor {
+public class BindCommand implements CommandExecutor, TabCompleter { // ADDED TabCompleter
   private final AuthWithQqPlugin plugin;
 
   /**
@@ -56,7 +60,9 @@ public class BindCommand implements CommandExecutor {
     if (args.length == 1 && args[0].equalsIgnoreCase("profile")) {
       long qq = plugin.getDatabaseManager().getQq(player.getUniqueId());
       if (qq == 0) { // Player is not bound
-        player.sendMessage(plugin.getMessageManager().getMessage("messages.bind-command.not-bound", Map.of("%player%", player.getName()))); // Needs new message config
+        Map<String, String> notBoundReplacements = new HashMap<>();
+        notBoundReplacements.put("%player%", player.getName());
+        player.sendMessage(plugin.getMessageManager().getMessage("messages.bind-command.not-bound", notBoundReplacements)); // Needs new message config
         return true;
       }
 
@@ -73,13 +79,34 @@ public class BindCommand implements CommandExecutor {
                                          .clickEvent(ClickEvent.openUrl(profileLink));
       
       // Send message to player (needs new message config)
-      player.sendMessage(plugin.getMessageManager().getMessage("messages.bind-command.profile-link-prefix", Map.of("%link%", profileLink)).append(clickableLink)); // Needs new message config with prefix for link
+      Map<String, String> profileLinkReplacements = new HashMap<>();
+      profileLinkReplacements.put("%link%", profileLink);
+      player.sendMessage(plugin.getMessageManager().getMessage("messages.bind-command.profile-link-prefix", profileLinkReplacements).append(clickableLink)); // Needs new message config with prefix for link
       return true;
     }
 
     // All in-game binding logic is removed, players must bind via web
     sender.sendMessage(plugin.getMessageManager().getMessage("messages.bind-command.web-bind-only")); // New message config
     return true;
+  }
+
+  @Override
+  public @Nullable List<String> onTabComplete(@NotNull CommandSender sender,
+                                              @NotNull Command command,
+                                              @NotNull String alias, @NotNull String[] args) {
+    if (!(sender instanceof Player)) {
+      return Collections.emptyList();
+    }
+
+    if (args.length == 1) {
+      List<String> completions = new ArrayList<>();
+      completions.add("getcode");
+      completions.add("profile");
+      return completions.stream()
+          .filter(s -> s.toLowerCase().startsWith(args[0].toLowerCase()))
+          .toList();
+    }
+    return Collections.emptyList();
   }
 }
 

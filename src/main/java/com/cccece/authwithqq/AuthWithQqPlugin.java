@@ -73,15 +73,17 @@ public class AuthWithQqPlugin extends JavaPlugin {
     if (authCmd != null) {
       authCmd.setExecutor(new AuthCommand(this));
     }
-    // Disable in-game /bind command for players as per user request
-    // PluginCommand bindCmd = getCommand("bind");
-    // if (bindCmd != null) {
-    //   bindCmd.setExecutor(bindCommand);
-    // }
-    // PluginCommand aliasCmd = getCommand("绑定");
-    // if (aliasCmd != null) {
-    //   aliasCmd.setExecutor(bindCommand);
-    // }
+    // Enable in-game /bind command
+    PluginCommand bindCmd = getCommand("bind");
+    if (bindCmd != null) {
+      bindCmd.setExecutor(bindCommand);
+    }
+    PluginCommand aliasCmd = getCommand("绑定"); // Assuming "绑定" is an alias for "bind"
+    if (aliasCmd != null) {
+      aliasCmd.setExecutor(bindCommand);
+      aliasCmd.setTabCompleter(bindCommand); // Set tab completer for alias
+    }
+    bindCmd.setTabCompleter(bindCommand); // Set tab completer for /bind command
   }
 
   @Override

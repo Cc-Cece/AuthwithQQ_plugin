@@ -6,16 +6,20 @@ document.addEventListener('DOMContentLoaded', () => {
     const customFieldsContainer = document.getElementById('customFieldsContainer');
     const messageElement = document.getElementById('message');
 
-    // Parse URL parameters for uuid and name
+    // Parse URL parameters for uuid, name, and verificationCode
     const urlParams = new URLSearchParams(window.location.search);
     const uuid = urlParams.get('uuid');
     const name = urlParams.get('name');
+    const verificationCode = urlParams.get('verificationCode'); // ADDED
 
     if (uuid) {
         uuidInput.value = uuid;
     }
     if (name) {
         nameInput.value = decodeURIComponent(name);
+    }
+    if (verificationCode) { // ADDED
+        verificationCodeInput.value = verificationCode; // ADDED
     }
 
     // Fetch custom fields from API and dynamically create form inputs
@@ -79,9 +83,8 @@ document.addEventListener('DOMContentLoaded', () => {
         .then(response => response.json())
         .then(result => {
             if (result.success) {
-                messageElement.textContent = '绑定成功！请返回游戏。';
-                messageElement.style.color = 'green';
-                authForm.reset(); // Optionally clear the form
+                // Redirect to success page
+                window.location.href = 'success.html';
             } else {
                 messageElement.textContent = result.error || '绑定失败。';
                 messageElement.style.color = 'red';
