@@ -1,8 +1,7 @@
 document.addEventListener('DOMContentLoaded', () => {
     const playersTableBody = document.querySelector('#playersTable tbody');
     const playersMessage = document.getElementById('players-message');
-    const pluginConfigPre = document.getElementById('pluginConfig');
-    const configMessage = document.getElementById('config-message');
+    // Removed pluginConfigPre and configMessage as they are no longer needed
 
     // Function to get API Token from URL or Cookie
     function getApiToken() {
@@ -24,7 +23,7 @@ document.addEventListener('DOMContentLoaded', () => {
             location.reload(); // Reload to apply token
         } else {
             playersMessage.textContent = '未提供 API Token，无法加载玩家数据。';
-            configMessage.textContent = '未提供 API Token，无法加载配置数据。';
+            // configMessage.textContent = '未提供 API Token，无法加载配置数据。'; // Removed
             return;
         }
     }
@@ -56,6 +55,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 row.insertCell().textContent = new Date(parseInt(player.Created)).toLocaleString();
 
                 const actionCell = row.insertCell();
+                const editButton = document.createElement('button');
+                editButton.textContent = '编辑';
+                editButton.className = 'btn-edit';
+                editButton.onclick = () => window.location.href = `admin_edit_player.html?uuid=${player.UUID}&token=${apiToken}`;
+                actionCell.appendChild(editButton);
+
                 const unbindButton = document.createElement('button');
                 unbindButton.textContent = '解绑';
                 unbindButton.className = 'btn-unbind';
@@ -105,33 +110,11 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // --- Fetch and display Plugin Config ---
-    function fetchConfig() {
-        fetch('/api/config', {
-            headers: {
-                'X-API-Token': apiToken
-            }
-        })
-        .then(response => {
-            if (response.status === 401) {
-                throw new Error('Unauthorized. 请检查您的 API Token。');
-            }
-            return response.json();
-        })
-        .then(config => {
-            pluginConfigPre.textContent = JSON.stringify(config, null, 2);
-            configMessage.textContent = ''; // Clear message on success
-        })
-        .catch(error => {
-            console.error('Error fetching config:', error);
-            configMessage.textContent = `加载配置失败: ${error.message}`;
-            configMessage.style.color = 'red';
-        });
-    }
+    // Removed fetchConfig() function as it is no longer needed
 
     // Initial load
     fetchPlayers();
-    fetchConfig();
+    // Removed fetchConfig() call
 
     // --- Handle Add/Modify Binding Form ---
     const bindForm = document.getElementById('bindForm');

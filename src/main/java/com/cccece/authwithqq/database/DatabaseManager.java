@@ -141,6 +141,24 @@ public class DatabaseManager {
   }
 
   /**
+   * Deletes a specific metadata entry for a player.
+   *
+   * @param uuid The player's UUID.
+   * @param key The metadata key to delete.
+   */
+  public void deleteMeta(UUID uuid, String key) {
+    String sql = "DELETE FROM player_meta WHERE uuid = ? AND meta_key = ?";
+    try (Connection conn = getConnection();
+         PreparedStatement pstmt = conn.prepareStatement(sql)) {
+      pstmt.setString(1, uuid.toString());
+      pstmt.setString(2, key);
+      pstmt.executeUpdate();
+    } catch (SQLException e) {
+      logger.log(Level.SEVERE, "Could not delete meta", e);
+    }
+  }
+
+  /**
    * Gets all metadata keys present in the database.
    *
    * @return A list of distinct metadata keys.

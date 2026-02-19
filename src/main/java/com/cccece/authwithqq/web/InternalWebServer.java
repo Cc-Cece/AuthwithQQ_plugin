@@ -611,26 +611,46 @@ public class InternalWebServer {
       }
 
       Map<String, String> query = AuthWithQqPlugin.parseQuery(exchange.getRequestURI().getQuery());
-      String token = query.get("token");
-      if (token == null || token.isEmpty()) {
-        sendResponse(exchange, 400, "Missing session token");
+      String token = query.get("token"); // Player session token
+      String playerUuidString = query.get("uuid"); // Player UUID for admin access
+
+      UUID uuid = null; // Final UUID to fetch profile for
+
+      if (token != null && !token.isEmpty()) {
+        // Player access using session token
+        uuid = plugin.validateProfileSessionToken(token);
+        if (uuid == null) {
+          sendResponse(exchange, 401, "{\"error\":\"Invalid or expired session token\"}");
+          return;
+        }
+      } else if (playerUuidString != null && !playerUuidString.isEmpty()) {
+        // Admin access using X-API-Token and player UUID
+        if (!authenticate(exchange)) { // Authenticate admin
+          return;
+        }
+        try {
+          uuid = UUID.fromString(playerUuidString);
+        } catch (IllegalArgumentException e) {
+          sendResponse(exchange, 400, "Invalid player UUID format");
+          return;
+        }
+      } else {
+        // Neither token nor uuid provided
+        sendResponse(exchange, 400, "Missing session token or player UUID");
         return;
       }
 
-      UUID uuid = plugin.validateProfileSessionToken(token);
-      if (uuid == null) {
-        sendResponse(exchange, 401, "{\"error\":\"Invalid or expired session token\"}");
-        return;
-      }
+      // At this point, 'uuid' should be valid whether from token or direct UUID
+      final UUID finalUuid = uuid; // For use in lambda
 
       try {
         Future<JsonObject> future = Bukkit.getScheduler().callSyncMethod(plugin, () -> {
           JsonObject json = new JsonObject();
-          long qq = plugin.getDatabaseManager().getQq(uuid);
-          String name = plugin.getDatabaseManager().getNameByUuid(uuid);
-          Map<String, String> meta = plugin.getDatabaseManager().getAllMeta(uuid);
+          long qq = plugin.getDatabaseManager().getQq(finalUuid);
+          String name = plugin.getDatabaseManager().getNameByUuid(finalUuid);
+          Map<String, String> meta = plugin.getDatabaseManager().getAllMeta(finalUuid);
           
-          json.addProperty("uuid", uuid.toString());
+          json.addProperty("uuid", finalUuid.toString());
           json.addProperty("name", name);
           json.addProperty("qq", qq);
 
@@ -660,30 +680,56 @@ public class InternalWebServer {
       try (BufferedReader reader = new BufferedReader(
           new InputStreamReader(exchange.getRequestBody(), StandardCharsets.UTF_8))) {
         JsonObject body = gson.fromJson(reader, JsonObject.class);
-        String token = body.get("token").getAsString();
-        if (token == null || token.isEmpty()) {
-          sendResponse(exchange, 400, "Missing session token");
-          return;
+        String tokenFromBody = body.has("token") ? body.get("token").getAsString() : null; // Token for player session
+        String playerUuidStringFromBody = body.has("uuid") ? body.get("uuid").getAsString() : null; // UUID for admin context
+
+        UUID uuidToUpdate = null; // Final UUID to update profile for
+
+        // Try to authenticate as admin first
+        boolean isAdminAuthenticated = authenticate(exchange); // This checks X-API-Token header
+
+        if (isAdminAuthenticated) {
+          // Admin update: UUID comes from body (admin_edit_player.js sends it)
+          if (playerUuidStringFromBody == null || playerUuidStringFromBody.isEmpty()) {
+            sendResponse(exchange, 400, "Missing player UUID in request body for admin update");
+            return;
+          }
+          try {
+            uuidToUpdate = UUID.fromString(playerUuidStringFromBody);
+          } catch (IllegalArgumentException e) {
+            sendResponse(exchange, 400, "Invalid player UUID format in request body for admin update");
+            return;
+          }
+        } else {
+          // Player update: UUID derived from session token
+          if (tokenFromBody == null || tokenFromBody.isEmpty()) {
+            sendResponse(exchange, 400, "Missing session token");
+            return;
+          }
+          uuidToUpdate = plugin.validateProfileSessionToken(tokenFromBody);
+          if (uuidToUpdate == null) {
+            sendResponse(exchange, 401, "{\"error\":\"Invalid or expired session token\"}");
+            return;
+          }
         }
 
-        UUID uuid = plugin.validateProfileSessionToken(token);
-        if (uuid == null) {
-          sendResponse(exchange, 401, "{\"error\":\"Invalid or expired session token\"}");
-          return;
-        }
-
+        final UUID finalUuid = uuidToUpdate; // For use in lambda
         long newQq = body.get("qq").getAsLong();
         JsonObject meta = body.getAsJsonObject("meta");
 
         Future<Boolean> future = Bukkit.getScheduler().callSyncMethod(plugin, () -> {
-          plugin.getDatabaseManager().updateBinding(uuid, newQq); // Update QQ
+          plugin.getDatabaseManager().updateBinding(finalUuid, newQq); // Update QQ
 
           // Update custom meta fields
           for (Map.Entry<String, com.google.gson.JsonElement> entry : meta.entrySet()) {
-            plugin.getDatabaseManager().setMeta(uuid, entry.getKey(),
-                entry.getValue().getAsString());
+            // Remove meta field if value is null or empty string
+            if (entry.getValue().isJsonNull() || (entry.getValue().isJsonPrimitive() && entry.getValue().getAsString().isEmpty())) {
+                plugin.getDatabaseManager().deleteMeta(finalUuid, entry.getKey());
+            } else {
+                plugin.getDatabaseManager().setMeta(finalUuid, entry.getKey(), entry.getValue().getAsString());
+            }
           }
-          plugin.handleBindingChange(uuid, newQq); // Update guest status if online
+          plugin.handleBindingChange(finalUuid, newQq); // Update guest status if online
           return true;
         });
         future.get(); // Wait for completion

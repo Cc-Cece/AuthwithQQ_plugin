@@ -21,7 +21,7 @@ whitelist:
 server:
   port: 8081
   token: "changeme"
-  external-address: "YOUR_SERVER_IP_OR_DOMAIN" # 用于玩家通过网页绑定时的外部访问地址。例如：example.com 或 123.45.67.89。如果留空或不配置，默认使用127.0.0.1。
+  external-address: "127.0.0.1" # 用于玩家通过网页绑定时的外部访问地址。例如：example.com 或 123.45.67.89。如果留空或不配置，默认使用127.0.0.1。
 
 guest-mode:
   allow-move: true # 布尔值，默认 true。如果为 false，则给予玩家 SLOW (等级 255) 和 JUMP (等级 128) 药水效果以禁止移动和跳跃。
