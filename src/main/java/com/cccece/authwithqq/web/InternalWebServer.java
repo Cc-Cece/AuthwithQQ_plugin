@@ -12,6 +12,7 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.util.List; // ADDED THIS IMPORT
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
@@ -57,6 +58,14 @@ public class InternalWebServer {
       server.createContext("/api/bind", new BindHandler());
       server.createContext("/api/kick", new KickHandler());
       server.createContext("/api/whitelist", new WhitelistHandler());
+      server.createContext("/api/meta", new MetaHandler()); // API for custom fields
+      server.createContext("/api/players", new PlayersHandler()); // API for players data
+      server.createContext("/api/unbind", new UnbindHandler()); // API for unbinding players
+      server.createContext("/api/config", new ConfigHandler()); // API for plugin configuration
+      server.createContext("/", new RedirectHandler("/web/dashboard.html")); // Redirect to dashboard
+      server.createContext("/dashboard", new RedirectHandler("/web/dashboard.html")); // Explicit dashboard route
+      server.createContext("/admin", new AuthenticatedRedirectHandler("/web/admin.html")); // Admin console
+      server.createContext("/web", new StaticFileHandler()); // Serve static web resources
       server.setExecutor(null);
       server.start();
       plugin.getLogger().info("Web server started on port " + port);
@@ -105,6 +114,12 @@ public class InternalWebServer {
           json.addProperty("online_players", Bukkit.getOnlinePlayers().size());
           json.addProperty("max_players", Bukkit.getMaxPlayers());
           json.addProperty("tps", Bukkit.getTPS()[0]);
+
+          com.google.gson.JsonArray onlinePlayerNames = new com.google.gson.JsonArray();
+          for (Player p : Bukkit.getOnlinePlayers()) {
+            onlinePlayerNames.add(p.getName());
+          }
+          json.add("online_player_names", onlinePlayerNames);
           return json;
         });
         JsonObject json = future.get(); // This blocks until the main thread runs the code
@@ -194,7 +209,8 @@ public class InternalWebServer {
         
         sendResponse(exchange, 200, "{\"success\":true}");
       } catch (Exception e) {
-        sendResponse(exchange, 500, "Error: " + e.getMessage());
+        plugin.getLogger().log(Level.SEVERE, "Error during unbind operation", e);
+        sendResponse(exchange, 500, "{\"error\":\"Internal server error\"}");
       }
     }
   }
@@ -224,7 +240,8 @@ public class InternalWebServer {
         });
         sendResponse(exchange, 200, "{\"success\":true}");
       } catch (Exception e) {
-        sendResponse(exchange, 500, "Error: " + e.getMessage());
+        plugin.getLogger().log(Level.SEVERE, "Error during unbind operation", e);
+        sendResponse(exchange, 500, "{\"error\":\"Internal server error\"}");
       }
     }
   }
@@ -252,7 +269,203 @@ public class InternalWebServer {
         });
         sendResponse(exchange, 200, "{\"success\":true}");
       } catch (Exception e) {
-        sendResponse(exchange, 500, "Error: " + e.getMessage());
+        plugin.getLogger().log(Level.SEVERE, "Error during unbind operation", e);
+        sendResponse(exchange, 500, "{\"error\":\"Internal server error\"}");
+      }
+    }
+  }
+  
+  private class ConfigHandler implements HttpHandler {
+    @Override
+    public void handle(HttpExchange exchange) throws IOException {
+      if (!authenticate(exchange)) {
+        return;
+      }
+
+      // Create a copy of the config and remove sensitive information
+      // ConfigurationSection is a map-like structure, so we can convert it to a Map<String, Object>
+      Map<String, Object> configMap = plugin.getConfig().getValues(true);
+      JsonObject jsonConfig = new JsonObject();
+      for (Map.Entry<String, Object> entry : configMap.entrySet()) {
+        if (entry.getKey().equals("server.token")) {
+          jsonConfig.addProperty(entry.getKey(), "********"); // Mask the token
+        } else if (entry.getValue() instanceof String) {
+          jsonConfig.addProperty(entry.getKey(), (String) entry.getValue());
+        } else if (entry.getValue() instanceof Number) {
+          jsonConfig.addProperty(entry.getKey(), (Number) entry.getValue());
+        } else if (entry.getValue() instanceof Boolean) {
+          jsonConfig.addProperty(entry.getKey(), (Boolean) entry.getValue());
+        } else {
+          // Attempt to convert other types to string or use gson to serialize
+          jsonConfig.addProperty(entry.getKey(), String.valueOf(entry.getValue()));
+        }
+      }
+      sendResponse(exchange, 200, gson.toJson(jsonConfig));
+    }
+  }
+
+  private class RedirectHandler implements HttpHandler {
+    private final String targetPath;
+
+    public RedirectHandler(String targetPath) {
+      this.targetPath = targetPath;
+    }
+
+    @Override
+    public void handle(HttpExchange exchange) throws IOException {
+      exchange.getResponseHeaders().set("Location", targetPath);
+      exchange.sendResponseHeaders(302, -1); // 302 Found (temporary redirect)
+    }
+  }
+
+  private class AuthenticatedRedirectHandler implements HttpHandler {
+    private final String targetPath;
+
+    public AuthenticatedRedirectHandler(String targetPath) {
+      this.targetPath = targetPath;
+    }
+
+    @Override
+    public void handle(HttpExchange exchange) throws IOException {
+      if (!authenticate(exchange)) {
+        return;
+      }
+      exchange.getResponseHeaders().set("Location", targetPath);
+      exchange.sendResponseHeaders(302, -1); // 302 Found (temporary redirect)
+    }
+  }
+
+  private class MetaHandler implements HttpHandler {
+    @Override
+    public void handle(HttpExchange exchange) throws IOException {
+      List<Map<?, ?>> customFields = plugin.getConfig().getMapList("binding.custom-fields");
+      
+      com.google.gson.JsonArray jsonArray = new com.google.gson.JsonArray();
+      for (Map<?, ?> field : customFields) {
+        JsonObject fieldObject = new JsonObject();
+        field.forEach((key, value) -> {
+          if (value instanceof String) {
+            fieldObject.addProperty(key.toString(), (String) value);
+          } else if (value instanceof Boolean) {
+            fieldObject.addProperty(key.toString(), (Boolean) value);
+          } else if (value instanceof Number) {
+            fieldObject.addProperty(key.toString(), (Number) value);
+          }
+        });
+        jsonArray.add(fieldObject);
+      }
+      sendResponse(exchange, 200, jsonArray.toString());
+    }
+  }
+
+  private class PlayersHandler implements HttpHandler {
+    @Override
+    public void handle(HttpExchange exchange) throws IOException {
+      if (!authenticate(exchange)) {
+        return;
+      }
+
+      List<Map<String, String>> allPlayersData = plugin.getDatabaseManager().getAllPlayersData();
+      com.google.gson.JsonArray jsonArray = new com.google.gson.JsonArray();
+      for (Map<String, String> playerData : allPlayersData) {
+        JsonObject playerObject = new JsonObject();
+        playerData.forEach(playerObject::addProperty);
+        jsonArray.add(playerObject);
+      }
+      sendResponse(exchange, 200, jsonArray.toString());
+    }
+  }
+
+  private class UnbindHandler implements HttpHandler {
+    @Override
+    public void handle(HttpExchange exchange) throws IOException {
+      if (!authenticate(exchange)) {
+        return;
+      }
+      if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+        sendResponse(exchange, 405, "Method not allowed");
+        return;
+      }
+
+      try (BufferedReader reader = new BufferedReader(
+          new InputStreamReader(exchange.getRequestBody(), StandardCharsets.UTF_8))) {
+        JsonObject body = gson.fromJson(reader, JsonObject.class);
+        String uuidString = body.get("uuid").getAsString();
+        
+        UUID uuid;
+        try {
+          uuid = UUID.fromString(uuidString);
+        } catch (IllegalArgumentException e) {
+          sendResponse(exchange, 400, "Invalid UUID format");
+          return;
+        }
+
+        // Database modification (set QQ to 0)
+        plugin.getDatabaseManager().updateBinding(uuid, 0L);
+
+        // In-game synchronization
+        Bukkit.getScheduler().runTask(plugin, () -> {
+          Player player = Bukkit.getPlayer(uuid);
+          if (player != null) {
+            // Further actions like kicking the player, sending a message, etc.
+            player.sendMessage("You have been unbound from QQ."); // Example
+            // plugin.unmarkGuest(uuid); // If unbinding means they become a guest again
+          }
+        });
+        
+        sendResponse(exchange, 200, "{\"success\":true}");
+      } catch (Exception e) {
+        plugin.getLogger().log(Level.SEVERE, "Error during unbind operation", e);
+        sendResponse(exchange, 500, "{\"error\":\"Internal server error\"}");
+      }
+    }
+  }
+
+  private class StaticFileHandler implements HttpHandler {
+    @Override
+    public void handle(HttpExchange exchange) throws IOException {
+      String path = exchange.getRequestURI().getPath();
+      // Remove the /web prefix and ensure it's a relative path within 'web' folder
+      if (path.startsWith("/web")) {
+        path = path.substring("/web".length());
+      }
+      // Sanitize path to prevent directory traversal
+      path = path.replace("..", "").replace("//", "/");
+
+      // Construct the resource path within the JAR (e.g., "web/auth.html")
+      String resourcePath = "web" + path;
+      if (resourcePath.endsWith("/")) { // Default to index.html for directories
+        resourcePath += "index.html";
+      }
+
+      try (java.io.InputStream is = plugin.getResource(resourcePath)) {
+        if (is == null) {
+          plugin.getLogger().warning("Resource not found: " + resourcePath);
+          sendResponse(exchange, 404, "404 Not Found");
+          return;
+        }
+
+        // Determine Content-Type based on file extension
+        String contentType = "text/plain";
+        if (resourcePath.endsWith(".html")) {
+          contentType = "text/html";
+        } else if (resourcePath.endsWith(".css")) {
+          contentType = "text/css";
+        } else if (resourcePath.endsWith(".js")) {
+          contentType = "application/javascript";
+        } else if (resourcePath.endsWith(".json")) {
+          contentType = "application/json";
+        }
+
+        byte[] responseBytes = is.readAllBytes();
+        exchange.getResponseHeaders().set("Content-Type", contentType + "; charset=utf-8");
+        exchange.sendResponseHeaders(200, responseBytes.length);
+        try (OutputStream os = exchange.getResponseBody()) {
+          os.write(responseBytes);
+        }
+      } catch (Exception e) {
+        plugin.getLogger().log(Level.SEVERE, "Error serving static file: " + resourcePath, e);
+        sendResponse(exchange, 500, "500 Internal Server Error");
       }
     }
   }

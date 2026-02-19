@@ -1,6 +1,16 @@
 binding:
   code-length: 6 # 整数，默认 6。支持生成 4-8 位的数字验证码。
   code-expiration: 300 # 整数，单位秒，默认 300 (5分钟)。验证码的过期时间。
+  custom-fields: # 自定义字段，用于前端认证页面动态生成输入框
+    - name: "school"
+      type: "text"
+      label: "学校"
+      required: true
+    - name: "major"
+      type: "text"
+      label: "专业"
+      required: false
+
 
 server:
   port: 8081

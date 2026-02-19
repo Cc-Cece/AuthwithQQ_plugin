@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>玩家认证</title>
+    <link rel="stylesheet" href="auth.css">
+</head>
+<body>
+    <div class="container">
+        <h1>玩家认证</h1>
+        <p>请填写以下信息完成绑定。</p>
+        <form id="authForm">
+            <input type="hidden" id="uuid" name="uuid">
+            <div class="form-group">
+                <label for="name">玩家名:</label>
+                <input type="text" id="name" name="name" readonly>
+            </div>
+            <!-- Custom fields will be injected here by JavaScript -->
+            <div id="customFieldsContainer"></div>
+            <div class="form-group">
+                <label for="qq">QQ号:</label>
+                <input type="number" id="qq" name="qq" required>
+            </div>
+            <button type="submit" class="btn">提交绑定</button>
+            <p id="message" class="message"></p>
+        </form>
+    </div>
+    <script src="auth.js"></script>
+</body>
+</html>

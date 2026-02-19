@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>服务器看板</title>
+    <link rel="stylesheet" href="dashboard.css">
+</head>
+<body>
+    <div class="header">
+        <h1>服务器实时监控看板</h1>
+    </div>
+    <div class="container">
+        <div class="card">
+            <h2>TPS (Ticks Per Second)</h2>
+            <p id="tps-value">加载中...</p>
+            <div class="chart-container">
+                <canvas id="tpsChart"></canvas>
+            </div>
+        </div>
+        <div class="card">
+            <h2>内存占用</h2>
+            <div class="progress-bar-container">
+                <div class="progress-bar" id="memory-progress"></div>
+            </div>
+            <p id="memory-value">加载中...</p>
+        </div>
+        <div class="card">
+            <h2>在线玩家</h2>
+            <div class="progress-bar-container">
+                <div class="progress-bar" id="players-progress"></div>
+            </div>
+            <p id="players-value">加载中...</p>
+            <ul id="online-players-list">
+                <!-- Online player IDs will be listed here -->
+            </ul>
+        </div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="dashboard.js"></script>
+</body>
+</html>
