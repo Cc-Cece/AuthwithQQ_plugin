@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets; // Added for bot UUID generation
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.UUID; // Added for UUID handling
 import net.kyori.adventure.text.Component;
@@ -114,9 +115,9 @@ public class AuthCommand implements CommandExecutor, TabCompleter {
       File file = new File(plugin.getDataFolder(), "export.csv");
       try {
         plugin.getCsvManager().exportCsv(file);
-        sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.csv.export-success", Map.of("%file%", file.getName())));
+        sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.csv.export-success", Collections.singletonMap("%file%", file.getName())));
       } catch (IOException e) {
-        sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.csv.export-fail", Map.of("%error%", e.getMessage())));
+        sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.csv.export-fail", Collections.singletonMap("%error%", e.getMessage())));
       }
     } else if ("import".equals(action)) {
       File file = new File(plugin.getDataFolder(), "import.csv");
@@ -126,9 +127,9 @@ public class AuthCommand implements CommandExecutor, TabCompleter {
       }
       try {
         plugin.getCsvManager().importCsv(file);
-        sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.csv.import-success", Map.of("%file%", file.getName())));
+        sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.csv.import-success", Collections.singletonMap("%file%", file.getName())));
       } catch (IOException e) {
-        sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.csv.import-fail", Map.of("%error%", e.getMessage())));
+        sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.csv.import-fail", Collections.singletonMap("%error%", e.getMessage())));
       }
     } else {
       sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.command-usage.csv"));
@@ -144,16 +145,16 @@ public class AuthCommand implements CommandExecutor, TabCompleter {
         if (!whitelistedPlayers.contains(playerName)) {
           whitelistedPlayers.add(playerName);
           changed = true;
-          sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.whitelist.add-success", Map.of("%player%", playerName)));
+          sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.whitelist.add-success", Collections.singletonMap("%player%", playerName)));
         } else {
-          sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.whitelist.already-whitelisted", Map.of("%player%", playerName)));
+          sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.whitelist.already-whitelisted", Collections.singletonMap("%player%", playerName)));
         }
       } else if ("remove".equals(action)) {
         if (whitelistedPlayers.remove(playerName)) {
           changed = true;
-          sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.whitelist.remove-success", Map.of("%player%", playerName)));
+          sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.whitelist.remove-success", Collections.singletonMap("%player%", playerName)));
         } else {
-          sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.whitelist.not-whitelisted", Map.of("%player%", playerName)));
+          sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.whitelist.not-whitelisted", Collections.singletonMap("%player%", playerName)));
         }
       } else {
         sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.command-usage.whitelist"));
@@ -170,68 +171,70 @@ public class AuthCommand implements CommandExecutor, TabCompleter {
 
   private void handleBindCommand(CommandSender sender, String playerName, String qqString) {
     Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-      UUID playerUuid = plugin.getDatabaseManager().getPlayerUuid(playerName);
-      if (playerUuid == null) {
+      UUID tempPlayerUuid = plugin.getDatabaseManager().getPlayerUuid(playerName);
+      if (tempPlayerUuid == null) {
         // Try to get UUID from Bukkit if player is online or known
         OfflinePlayer offlinePlayer = Bukkit.getOfflinePlayer(playerName);
         if (offlinePlayer != null && offlinePlayer.hasPlayedBefore()) {
-          playerUuid = offlinePlayer.getUniqueId();
+          tempPlayerUuid = offlinePlayer.getUniqueId();
         }
       }
+      final UUID playerUuid = tempPlayerUuid;
 
       if (playerUuid == null) {
-        sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.bind.player-not-found", Map.of("%player%", playerName)));
+        sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.bind.player-not-found", new HashMap<String, String>() {{ put("%player%", playerName); }}));
         return;
       }
 
-      long qq;
+      final long qq;
       try {
         qq = Long.parseLong(qqString);
       } catch (NumberFormatException e) {
-        sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.bind.invalid-qq", Map.of("%qq%", qqString)));
+        sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.bind.invalid-qq", new HashMap<String, String>() {{ put("%qq%", qqString); }}));
         return;
       }
 
       plugin.getDatabaseManager().updateBinding(playerUuid, qq);
-      sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.bind.force-bind-success", Map.of("%player%", playerName, "%uuid%", playerUuid.toString(), "%qq%", String.valueOf(qq))));
+      sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.bind.force-bind-success", new HashMap<String, String>() {{ put("%player%", playerName); put("%uuid%", playerUuid.toString()); put("%qq%", String.valueOf(qq)); }}));
     });
   }
 
   private void handleBotAddCommand(CommandSender sender, String ownerName, String botName) {
     Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-      UUID ownerUuid = plugin.getDatabaseManager().getPlayerUuid(ownerName);
-      if (ownerUuid == null) {
+      UUID tempOwnerUuid = plugin.getDatabaseManager().getPlayerUuid(ownerName);
+      if (tempOwnerUuid == null) {
         OfflinePlayer offlinePlayer = Bukkit.getOfflinePlayer(ownerName);
         if (offlinePlayer != null && offlinePlayer.hasPlayedBefore()) {
-          ownerUuid = offlinePlayer.getUniqueId();
+          tempOwnerUuid = offlinePlayer.getUniqueId();
         }
       }
+      final UUID ownerUuid = tempOwnerUuid;
 
       if (ownerUuid == null) {
-        sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.bot.owner-not-found", Map.of("%owner%", ownerName)));
+        sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.bot.owner-not-found", new HashMap<String, String>() {{ put("%owner%", ownerName); }}));
         return;
       }
 
       // Check owner is bound to a QQ
       long ownerQq = plugin.getDatabaseManager().getQq(ownerUuid);
       if (ownerQq == 0) {
-        sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.bot.owner-qq-not-bound", Map.of("%owner%", ownerName)));
+        sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.bot.owner-qq-not-bound", new HashMap<String, String>() {{ put("%owner%", ownerName); }}));
         return;
       }
 
       // Check bot limit
-      int maxBotsPerPlayer = plugin.getConfig().getInt("binding.max-bots-per-player", 0);
+      final int maxBotsPerPlayer = plugin.getConfig().getInt("binding.max-bots-per-player", 0);
       int currentBotCount = plugin.getDatabaseManager().getBotCountForOwner(ownerUuid);
       if (maxBotsPerPlayer > 0 && currentBotCount >= maxBotsPerPlayer) {
-        sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.bot.bot-limit-reached", Map.of("%owner%", ownerName, "%limit%", String.valueOf(maxBotsPerPlayer))));
+        sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.bot.bot-limit-reached", new HashMap<String, String>() {{ put("%owner%", ownerName); put("%limit%", String.valueOf(maxBotsPerPlayer)); }}));
         return;
       }
 
       // Generate a UUID for the bot (deterministic based on name for consistency if needed, or random)
-      UUID botUuid = UUID.nameUUIDFromBytes(("Bot-" + botName).getBytes(StandardCharsets.UTF_8));
+      final UUID botUuid = UUID.nameUUIDFromBytes(("Bot-" + botName).getBytes(StandardCharsets.UTF_8));
 
       plugin.getDatabaseManager().markPlayerAsBot(botUuid, ownerUuid, botName);
-      sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.bot.add-success", Map.of("%bot_name%", botName, "%bot_uuid%", botUuid.toString(), "%owner_name%", ownerName, "%owner_uuid%", ownerUuid.toString())));
+      sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.bot.add-success", new HashMap<String, String>() {{ put("%bot_name%", botName); put("%bot_uuid%", botUuid.toString()); put("%owner_name%", ownerName); put("%owner_uuid%", ownerUuid.toString()); }}));
     });
   }
 

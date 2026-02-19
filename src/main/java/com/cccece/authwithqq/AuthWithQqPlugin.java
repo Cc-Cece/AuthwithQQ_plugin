@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.security.SecureRandom; // Placed after java.util.Objects for CustomImportOrder
 import java.util.UUID;
+import com.cccece.authwithqq.util.MessageManager;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.plugin.java.JavaPlugin;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
