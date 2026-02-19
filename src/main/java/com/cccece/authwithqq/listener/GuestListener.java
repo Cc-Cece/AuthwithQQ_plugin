@@ -28,6 +28,8 @@ import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 
+import org.bukkit.metadata.MetadataValue;
+import org.bukkit.plugin.Plugin;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
 /**
@@ -37,7 +39,6 @@ public class GuestListener implements Listener {
   private final AuthWithQqPlugin plugin;
   private final Set<UUID> guestCache = new HashSet<>();
   private final Map<UUID, GameMode> originalGameModes = new HashMap<>();
-  private final Map<UUID, VerificationCodeEntry> playerVerificationCodes = new HashMap<>();
   private final LegacyComponentSerializer serializer = LegacyComponentSerializer.legacyAmpersand();
 
   /**
@@ -50,17 +51,6 @@ public class GuestListener implements Listener {
     this.plugin = plugin;
   }
 
-  // Inner class to hold verification code and its generation timestamp
-  private static class VerificationCodeEntry {
-    final String code;
-    final long timestamp;
-
-    VerificationCodeEntry(String code, long timestamp) {
-      this.code = code;
-      this.timestamp = timestamp;
-    }
-  }
-
   /**
    * Clears the guest cache and stored game modes for a player when they quit.
    *
@@ -71,7 +61,7 @@ public class GuestListener implements Listener {
     UUID uuid = event.getPlayer().getUniqueId();
     guestCache.remove(uuid);
     originalGameModes.remove(uuid);
-    playerVerificationCodes.remove(uuid);
+    plugin.invalidateCode(uuid); // Invalidate code from centralized manager on quit
   }
 
   /**
@@ -89,6 +79,33 @@ public class GuestListener implements Listener {
       long qq = plugin.getDatabaseManager().getQq(uuid);
 
       plugin.getServer().getScheduler().runTask(plugin, () -> {
+        // --- NEW: Whitelist and Fake Player Bypass Logic ---
+        List<String> whitelistedPlayers = plugin.getConfig().getStringList("whitelist.players");
+        boolean bypassOps = plugin.getConfig().getBoolean("whitelist.bypass-ops", true);
+        boolean allowFakePlayers = plugin.getConfig().getBoolean("guest-mode.allow-fake-players", false);
+
+        // Check for whitelisted players
+        if (whitelistedPlayers.contains(player.getName())) {
+          plugin.getLogger().info(player.getName() + " is whitelisted, skipping verification.");
+          unmarkGuest(uuid);
+          return;
+        }
+
+        // Check for ops if bypass-ops is enabled
+        if (bypassOps && player.isOp()) {
+          plugin.getLogger().info(player.getName() + " is an operator, skipping verification.");
+          unmarkGuest(uuid);
+          return;
+        }
+
+        // Check for fake players (Citizens NPC)
+        if (allowFakePlayers && player.hasMetadata("NPC")) { // Assuming "NPC" metadata for Citizens
+          plugin.getLogger().info(player.getName() + " is a fake player, skipping verification.");
+          unmarkGuest(uuid);
+          return;
+        }
+        // --- END NEW LOGIC ---
+
         if (qq == 0) {
           guestCache.add(uuid);
           
@@ -136,18 +153,7 @@ public class GuestListener implements Listener {
           }
 
           // Generate and store verification code with expiration logic
-          int codeExpiration = plugin.getConfig().getInt("binding.code-expiration", 300); // Default 300 seconds
-          VerificationCodeEntry entry = playerVerificationCodes.get(uuid);
-          String verificationCode;
-
-          if (entry != null && (System.currentTimeMillis() - entry.timestamp) < (codeExpiration * 1000L)) {
-            // Use existing code if not expired
-            verificationCode = entry.code;
-          } else {
-            // Generate new code and store with current timestamp
-            verificationCode = plugin.generateCode();
-            playerVerificationCodes.put(uuid, new VerificationCodeEntry(verificationCode, System.currentTimeMillis()));
-          }
+          String verificationCode = plugin.getOrCreateCode(uuid); // Use centralized manager
 
           String message = plugin.getConfig()
               .getString("messages.guest-join", "Please bind your QQ")
@@ -359,11 +365,6 @@ public class GuestListener implements Listener {
    * @return The verification code, or null if not found.
    */
   public String getVerificationCode(UUID uuid) {
-    int codeExpiration = plugin.getConfig().getInt("binding.code-expiration", 300); // Default 300 seconds
-    VerificationCodeEntry entry = playerVerificationCodes.get(uuid);
-    if (entry != null && (System.currentTimeMillis() - entry.timestamp) < (codeExpiration * 1000L)) {
-      return entry.code;
-    }
-    return null;
+    return plugin.getOrCreateCode(uuid); // Use centralized manager
   }
 }

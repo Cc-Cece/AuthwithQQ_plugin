@@ -10,7 +10,12 @@ binding:
       type: "text"
       label: "专业"
       required: false
+  max-accounts-per-qq: 1 # 整数，默认 1。一个QQ号允许绑定的MC账号数量。
+  max-bots-per-player: 0 # 整数，默认 0。每个真实玩家允许绑定的假人数量。
 
+whitelist:
+  players: [] # 字符串列表，玩家ID。列表中的玩家无需绑定即可进入游戏。
+  bypass-ops: true # 布尔值，默认 true。OP是否自动跳过验证。
 
 server:
   port: 8081
@@ -28,10 +33,4 @@ guest-mode:
     - "/login"
     - "/register"
     - "/bind"
-
-messages:
-  guest-join: "&c请加入QQ群 123456 发送 /绑定 %code% 进行验证"
-  success: "&a验证成功，祝你游戏愉快！"
-  already-bound: "&e你已经绑定过了！"
-  bind-prompt: "&6请输入 /绑定 <验证码> 以完成绑定。"
-  world-change-denied: "&c未验证无法离开当前世界！" # New message
+  allow-fake-players: false # 布尔值，默认 false。如果为 true，则假人（NPC）将自动跳过验证。

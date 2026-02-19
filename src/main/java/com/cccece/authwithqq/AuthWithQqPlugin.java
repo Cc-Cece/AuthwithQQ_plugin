@@ -151,4 +151,66 @@ public class AuthWithQqPlugin extends JavaPlugin {
     }
     return code.toString();
   }
+
+  // --- Verification Code Management ---
+  private final Map<UUID, VerificationCodeEntry> playerVerificationCodes = new HashMap<>();
+
+  // Inner class to hold verification code and its generation timestamp
+  private static class VerificationCodeEntry {
+    final String code;
+    final long timestamp;
+
+    VerificationCodeEntry(String code, long timestamp) {
+      this.code = code;
+      this.timestamp = timestamp;
+    }
+  }
+
+  /**
+   * Retrieves an existing verification code for a player or generates a new one if expired or not found.
+   *
+   * @param uuid The player's UUID.
+   * @return The verification code.
+   */
+  public String getOrCreateCode(UUID uuid) {
+    int codeExpiration = getConfig().getInt("binding.code-expiration", 300); // Default 300 seconds
+    VerificationCodeEntry entry = playerVerificationCodes.get(uuid);
+    String verificationCode;
+
+    if (entry != null && (System.currentTimeMillis() - entry.timestamp) < (codeExpiration * 1000L)) {
+      // Use existing code if not expired
+      verificationCode = entry.code;
+    } else {
+      // Generate new code and store with current timestamp
+      verificationCode = generateCode();
+      playerVerificationCodes.put(uuid, new VerificationCodeEntry(verificationCode, System.currentTimeMillis()));
+    }
+    return verificationCode;
+  }
+
+  /**
+   * Checks if a given verification code is valid for a player's UUID and is not expired.
+   *
+   * @param code The code to validate.
+   * @param uuid The player's UUID.
+   * @return true if the code is valid and not expired, false otherwise.
+   */
+  public boolean isValidCode(String code, UUID uuid) {
+    int codeExpiration = getConfig().getInt("binding.code-expiration", 300); // Default 300 seconds
+    VerificationCodeEntry entry = playerVerificationCodes.get(uuid);
+
+    return entry != null
+        && entry.code.equals(code)
+        && (System.currentTimeMillis() - entry.timestamp) < (codeExpiration * 1000L);
+  }
+
+  /**
+   * Invalidates a verification code for a player, typically after a successful bind.
+   *
+   * @param uuid The player's UUID.
+   */
+  public void invalidateCode(UUID uuid) {
+    playerVerificationCodes.remove(uuid);
+  }
 }
+

@@ -62,6 +62,7 @@ public class InternalWebServer {
       server.createContext("/api/players", new PlayersHandler()); // API for players data
       server.createContext("/api/unbind", new UnbindHandler()); // API for unbinding players
       server.createContext("/api/config", new ConfigHandler()); // API for plugin configuration
+      server.createContext("/api/bot/bind", new BotBindHandler()); // New: API for binding fake players
       server.createContext("/", new RedirectHandler("/web/dashboard.html")); // Redirect to dashboard
       server.createContext("/dashboard", new RedirectHandler("/web/dashboard.html")); // Explicit dashboard route
       server.createContext("/admin", new AuthenticatedRedirectHandler("/web/admin.html")); // Admin console
@@ -194,7 +195,27 @@ public class InternalWebServer {
           return;
         }
 
+        // Validate the code using the centralized manager
+        if (!plugin.isValidCode(code, uuid)) {
+          sendResponse(exchange, 400, "{\"success\":false, \"error\":\"验证码无效或已过期\"}");
+          return;
+        }
+
+        // --- NEW: Multi-Account Binding Check ---
+        int maxAccountsPerQq = plugin.getConfig().getInt("binding.max-accounts-per-qq", 1);
+        long existingQqForUuid = plugin.getDatabaseManager().getQq(uuid);
+
+        if (existingQqForUuid == 0 || existingQqForUuid != qq) { // If not bound or changing QQ
+            int currentAccountCount = plugin.getDatabaseManager().getAccountCountByQq(qq);
+            if (currentAccountCount >= maxAccountsPerQq) {
+                sendResponse(exchange, 400, "{\"success\":false, \"error\":\"此QQ号码已达到绑定上限\"}");
+                return;
+            }
+        }
+        // --- END NEW LOGIC ---
+
         plugin.getDatabaseManager().updateBinding(uuid, qq);
+        plugin.invalidateCode(uuid); // Invalidate code after successful bind
         
         if (body.has("meta") && body.get("meta").isJsonObject()) {
           JsonObject meta = body.getAsJsonObject("meta");
@@ -209,7 +230,7 @@ public class InternalWebServer {
         
         sendResponse(exchange, 200, "{\"success\":true}");
       } catch (Exception e) {
-        plugin.getLogger().log(Level.SEVERE, "Error during unbind operation", e);
+        plugin.getLogger().log(Level.SEVERE, "Error during bind operation", e);
         sendResponse(exchange, 500, "{\"error\":\"Internal server error\"}");
       }
     }
@@ -240,7 +261,7 @@ public class InternalWebServer {
         });
         sendResponse(exchange, 200, "{\"success\":true}");
       } catch (Exception e) {
-        plugin.getLogger().log(Level.SEVERE, "Error during unbind operation", e);
+        plugin.getLogger().log(Level.SEVERE, "Error during kick operation", e);
         sendResponse(exchange, 500, "{\"error\":\"Internal server error\"}");
       }
     }
@@ -269,7 +290,7 @@ public class InternalWebServer {
         });
         sendResponse(exchange, 200, "{\"success\":true}");
       } catch (Exception e) {
-        plugin.getLogger().log(Level.SEVERE, "Error during unbind operation", e);
+        plugin.getLogger().log(Level.SEVERE, "Error during whitelist operation", e);
         sendResponse(exchange, 500, "{\"error\":\"Internal server error\"}");
       }
     }
@@ -416,6 +437,60 @@ public class InternalWebServer {
         sendResponse(exchange, 200, "{\"success\":true}");
       } catch (Exception e) {
         plugin.getLogger().log(Level.SEVERE, "Error during unbind operation", e);
+        sendResponse(exchange, 500, "{\"error\":\"Internal server error\"}");
+      }
+    }
+  }
+
+  // New: Handles binding a bot to an owner
+  private class BotBindHandler implements HttpHandler {
+    @Override
+    public void handle(HttpExchange exchange) throws IOException {
+      if (!authenticate(exchange)) {
+        return;
+      }
+      if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+        sendResponse(exchange, 405, "Method not allowed");
+        return;
+      }
+
+      try (BufferedReader reader = new BufferedReader(
+          new InputStreamReader(exchange.getRequestBody(), StandardCharsets.UTF_8))) {
+        JsonObject body = gson.fromJson(reader, JsonObject.class);
+        String ownerUuidString = body.get("owner_uuid").getAsString();
+        String botName = body.get("bot_name").getAsString();
+
+        UUID ownerUuid;
+        try {
+          ownerUuid = UUID.fromString(ownerUuidString);
+        } catch (IllegalArgumentException e) {
+          sendResponse(exchange, 400, "Invalid owner_uuid format");
+          return;
+        }
+        
+        // Ensure owner is bound to a QQ
+        long ownerQq = plugin.getDatabaseManager().getQq(ownerUuid);
+        if (ownerQq == 0) {
+          sendResponse(exchange, 400, "{\"success\":false, \"error\":\"Owner is not bound to a QQ\"}");
+          return;
+        }
+
+        // Check bot limit
+        int maxBotsPerPlayer = plugin.getConfig().getInt("binding.max-bots-per-player", 0);
+        int currentBotCount = plugin.getDatabaseManager().getBotCountForOwner(ownerUuid);
+        if (maxBotsPerPlayer > 0 && currentBotCount >= maxBotsPerPlayer) {
+          sendResponse(exchange, 400, "{\"success\":false, \"error\":\"达到假人绑定上限\"}");
+          return;
+        }
+
+        // Generate a UUID for the bot (deterministic based on name for consistency if needed, or random)
+        UUID botUuid = UUID.nameUUIDFromBytes(("Bot-" + botName).getBytes(StandardCharsets.UTF_8));
+
+        plugin.getDatabaseManager().markPlayerAsBot(botUuid, ownerUuid, botName);
+        
+        sendResponse(exchange, 200, "{\"success\":true}");
+      } catch (Exception e) {
+        plugin.getLogger().log(Level.SEVERE, "Error during bot bind operation", e);
         sendResponse(exchange, 500, "{\"error\":\"Internal server error\"}");
       }
     }

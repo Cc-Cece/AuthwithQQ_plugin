@@ -1,6 +1,7 @@
 package com.cccece.authwithqq;
 
-import java.util.Objects; // Placed before net.kyori.adventure... for CustomImportOrder
+import java.util.Objects;
+import java.util.UUID; // Added for UUID handling
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
@@ -36,17 +37,53 @@ public class BindCommand implements CommandExecutor {
       return true;
     }
 
-    long qq = plugin.getDatabaseManager().getQq(player.getUniqueId());
-    if (qq != 0) {
-      sender.sendMessage(Component.text("You are already bound to QQ: " + qq,
-          NamedTextColor.YELLOW));
-    } else {
-      String message = Objects.requireNonNullElse(
-          plugin.getConfig().getString("messages.bind-prompt", "Please bind your QQ"),
-          "Please bind your QQ").replace("%code%", player.getUniqueId().toString());
-      LegacyComponentSerializer serializer = LegacyComponentSerializer.legacyAmpersand();
-      sender.sendMessage(serializer.deserialize(message));
+    if (args.length < 2) {
+      sender.sendMessage(Component.text("用法: /bind <验证码> <QQ号码>", NamedTextColor.RED));
+      return true;
     }
+
+    String code = args[0];
+    long qq;
+    try {
+      qq = Long.parseLong(args[1]);
+    } catch (NumberFormatException e) {
+      sender.sendMessage(Component.text("无效的QQ号码: " + args[1] + "。", NamedTextColor.RED));
+      return true;
+    }
+
+    // Check if player is already bound
+    long existingQq = plugin.getDatabaseManager().getQq(player.getUniqueId());
+    if (existingQq != 0 && existingQq == qq) {
+      sender.sendMessage(Component.text("你已经绑定到此QQ号码了。", NamedTextColor.YELLOW));
+      return true;
+    } else if (existingQq != 0 && existingQq != qq) {
+      sender.sendMessage(Component.text("你已经绑定到其他QQ号码了，如需解绑请联系管理员。", NamedTextColor.RED));
+      return true;
+    }
+
+    // Validate the code using the centralized manager
+    if (!plugin.isValidCode(code, player.getUniqueId())) {
+      sender.sendMessage(Component.text("验证码无效或已过期，请尝试重新加入游戏获取。", NamedTextColor.RED));
+      return true;
+    }
+
+    // --- Multi-Account Binding Check (similar to Web API) ---
+    int maxAccountsPerQq = plugin.getConfig().getInt("binding.max-accounts-per-qq", 1);
+    int currentAccountCount = plugin.getDatabaseManager().getAccountCountByQq(qq);
+    if (currentAccountCount >= maxAccountsPerQq) {
+      sender.sendMessage(Component.text("此QQ号码已达到绑定上限。", NamedTextColor.RED));
+      return true;
+    }
+    // --- END Multi-Account Binding Check ---
+
+    // Perform binding and invalidate code
+    plugin.getDatabaseManager().updateBinding(player.getUniqueId(), qq);
+    plugin.invalidateCode(player.getUniqueId()); // Invalidate code after successful bind
+
+    // Notify plugin about binding (e.g., clear guest status)
+    plugin.handleBindingSuccess(player.getUniqueId()); // This will unmark guest, send success messages
+
     return true;
   }
 }
+

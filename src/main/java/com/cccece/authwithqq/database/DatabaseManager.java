@@ -251,4 +251,85 @@ public class DatabaseManager {
     }
     return null;
   }
+
+  /**
+   * Gets a player's UUID by their name.
+   *
+   * @param name The player's name.
+   * @return The UUID, or null if not found.
+   */
+  public UUID getPlayerUuid(String name) {
+    String sql = "SELECT uuid FROM auth_players WHERE name = ?";
+    try (Connection conn = getConnection();
+         PreparedStatement pstmt = conn.prepareStatement(sql)) {
+      pstmt.setString(1, name);
+      try (ResultSet rs = pstmt.executeQuery()) {
+        if (rs.next()) {
+          return UUID.fromString(rs.getString("uuid"));
+        }
+      }
+    } catch (SQLException e) {
+      logger.log(Level.SEVERE, "Could not get UUID by name", e);
+    }
+    return null;
+  }
+
+  /**
+   * Counts the number of accounts bound to a specific QQ number.
+   *
+   * @param qq The QQ number.
+   * @return The count of bound accounts.
+   */
+  public int getAccountCountByQq(long qq) {
+    String sql = "SELECT COUNT(*) FROM auth_players WHERE qq = ?";
+    try (Connection conn = getConnection();
+         PreparedStatement pstmt = conn.prepareStatement(sql)) {
+      pstmt.setLong(1, qq);
+      try (ResultSet rs = pstmt.executeQuery()) {
+        if (rs.next()) {
+          return rs.getInt(1);
+        }
+      }
+    } catch (SQLException e) {
+      logger.log(Level.SEVERE, "Could not get account count by QQ", e);
+    }
+    return 0;
+  }
+
+  /**
+   * Marks a player as a bot and associates it with an owner UUID.
+   *
+   * @param botUuid The UUID of the bot player.
+   * @param ownerUuid The UUID of the owner player.
+   * @param botName The name of the bot.
+   */
+  public void markPlayerAsBot(UUID botUuid, UUID ownerUuid, String botName) {
+    addGuest(botUuid, botName); // Ensure the bot is in auth_players table
+    setMeta(botUuid, "bot.is_bot", "true");
+    if (ownerUuid != null) {
+      setMeta(botUuid, "bot.owner_uuid", ownerUuid.toString());
+    }
+  }
+
+  /**
+   * Counts the number of bots associated with a specific owner UUID.
+   *
+   * @param ownerUuid The UUID of the owner player.
+   * @return The count of bots for the owner.
+   */
+  public int getBotCountForOwner(UUID ownerUuid) {
+    String sql = "SELECT COUNT(DISTINCT uuid) FROM player_meta WHERE meta_key = 'bot.owner_uuid' AND meta_value = ?";
+    try (Connection conn = getConnection();
+         PreparedStatement pstmt = conn.prepareStatement(sql)) {
+      pstmt.setString(1, ownerUuid.toString());
+      try (ResultSet rs = pstmt.executeQuery()) {
+        if (rs.next()) {
+          return rs.getInt(1);
+        }
+      }
+    } catch (SQLException e) {
+      logger.log(Level.SEVERE, "Could not get bot count for owner", e);
+    }
+    return 0;
+  }
 }
