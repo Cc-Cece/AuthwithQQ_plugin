@@ -4,32 +4,58 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>玩家认证</title>
+    <link rel="stylesheet" href="common.css">
+    <link rel="stylesheet" href="components.css">
     <link rel="stylesheet" href="auth.css">
 </head>
 <body>
     <div class="container">
-        <h1>玩家认证</h1>
-        <p>请填写以下信息完成绑定。</p>
-        <form id="authForm">
-            <input type="hidden" id="uuid" name="uuid">
-            <div class="form-group">
-                <label for="name">玩家名:</label>
-                <input type="text" id="name" name="name" readonly>
-            </div>
-            <!-- Custom fields will be injected here by JavaScript -->
-            <div id="customFieldsContainer"></div>
-            <div class="form-group">
-                <label for="verificationCode">验证码:</label>
-                <input type="text" id="verificationCode" name="code" required readonly>
-            </div>
-            <div class="form-group">
-                <label for="qq">QQ号:</label>
-                <input type="number" id="qq" name="qq" required>
-            </div>
-            <button type="submit" class="btn">提交绑定</button>
-            <p id="message" class="message"></p>
-        </form>
+        <div class="card">
+            <h1>玩家认证</h1>
+            <p>请填写以下信息完成绑定</p>
+            <form id="authForm">
+                <input type="hidden" id="uuid" name="uuid">
+                
+                <div class="form-group">
+                    <label for="name">玩家名</label>
+                    <input type="text" id="name" name="name" readonly>
+                </div>
+                
+                <!-- Custom fields will be injected here by JavaScript -->
+                <div id="customFieldsContainer"></div>
+                
+                <div class="form-group">
+                    <label for="verificationCode">验证码</label>
+                    <div class="code-display">
+                        <span class="code-value" id="codeValue">加载中...</span>
+                        <button type="button" class="btn-secondary btn-copy" id="copyCodeBtn" aria-label="复制验证码">
+                            <span id="copyBtnText">复制</span>
+                        </button>
+                    </div>
+                    <input type="hidden" id="verificationCode" name="code">
+                    <div class="countdown" id="countdown">
+                        <span>⏱</span>
+                        <span id="countdownText">验证码有效期: --:--</span>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="qq">QQ号</label>
+                    <input type="number" id="qq" name="qq" required 
+                           placeholder="请输入您的QQ号" 
+                           min="10000" 
+                           max="999999999999">
+                    <span class="input-hint" id="qqHint">请输入5-12位数字的QQ号</span>
+                    <span class="input-error" id="qqError" style="display: none;"></span>
+                </div>
+                
+                <button type="submit" class="btn" id="submitBtn">
+                    <span id="submitBtnText">提交绑定</span>
+                </button>
+            </form>
+        </div>
     </div>
+    <script src="components.js"></script>
     <script src="auth.js"></script>
 </body>
 </html>

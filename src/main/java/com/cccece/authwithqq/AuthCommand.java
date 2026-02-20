@@ -85,16 +85,18 @@ public class AuthCommand implements CommandExecutor, TabCompleter {
         return true;
       
       case "bot":
-        if (args.length < 4) {
-          sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.command-usage.bot-add"));
+          if (args.length < 3) {
+              sendHelpMessage(sender);
+              return true;
+          }
+          if ("add".equalsIgnoreCase(args[1]) && args.length == 4) {
+              handleBotAddCommand(sender, args[2], args[3]);
+          } else if ("unbind".equalsIgnoreCase(args[1]) && args.length == 3) {
+              handleBotUnbindCommand(sender, args[2]);
+          } else {
+              sendHelpMessage(sender);
+          }
           return true;
-        }
-        if ("add".equalsIgnoreCase(args[1])) {
-          handleBotAddCommand(sender, args[2], args[3]);
-        } else {
-          sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.command-usage.bot-add"));
-        }
-        return true;
 
       case "unbind":
         if (args.length < 2) {
@@ -117,6 +119,7 @@ public class AuthCommand implements CommandExecutor, TabCompleter {
     sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.help.whitelist"));
     sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.help.bind"));
     sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.help.bot-add"));
+    sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.help.bot-unbind"));
     sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.help.unbind"));
   }
 
@@ -249,6 +252,20 @@ public class AuthCommand implements CommandExecutor, TabCompleter {
     });
   }
 
+    private void handleBotUnbindCommand(CommandSender sender, String botName) {
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            UUID botUuid = plugin.getDatabaseManager().getBotUuidByName(botName);
+
+            if (botUuid == null) {
+                sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.bot.remove-not-owned", new HashMap<String, String>() {{ put("%bot_name%", botName); }}));
+                return;
+            }
+
+            plugin.getDatabaseManager().deleteBot(botUuid);
+            sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.bot.remove-success", new HashMap<String, String>() {{ put("%bot_name%", botName); }}));
+        });
+    }
+
   private void handleUnbindCommand(CommandSender sender, String playerName) {
     Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
       UUID tempPlayerUuid = plugin.getDatabaseManager().getPlayerUuid(playerName);
@@ -310,6 +327,7 @@ public class AuthCommand implements CommandExecutor, TabCompleter {
           break;
         case "bot":
           completions.add("add");
+          completions.add("unbind");
           break;
         default:
           break;
@@ -320,19 +338,20 @@ public class AuthCommand implements CommandExecutor, TabCompleter {
     if (args.length == 3) {
       switch (args[0].toLowerCase()) {
         case "whitelist": // /auth whitelist <add|remove> <player>
-          // Suggest online players
           Bukkit.getOnlinePlayers().forEach(player -> completions.add(player.getName()));
           break;
         case "bind": // /auth bind <player> <qq>
-          // Suggest online players
           Bukkit.getOnlinePlayers().forEach(player -> completions.add(player.getName()));
           break;
-        case "bot": // /auth bot add <owner_name> <bot_name>
-            // Suggest online players as owners
-            Bukkit.getOnlinePlayers().forEach(player -> completions.add(player.getName()));
+        case "bot":
+             if ("add".equalsIgnoreCase(args[1])) {
+                Bukkit.getOnlinePlayers().forEach(player -> completions.add(player.getName()));
+             } else if ("unbind".equalsIgnoreCase(args[1])) {
+                // This could be slow if there are many bots.
+                // For now, no suggestions. A better approach might cache bot names.
+             }
             break;
         case "unbind": // /auth unbind <player>
-            // Suggest online players for unbind
             Bukkit.getOnlinePlayers().forEach(player -> completions.add(player.getName()));
             break;
         default:
@@ -341,10 +360,8 @@ public class AuthCommand implements CommandExecutor, TabCompleter {
       return filter(completions, args[2]);
     }
 
-    // For /auth bind <player> <qq> and /auth bot add <owner_name> <bot_name>
     if (args.length == 4 && "bot".equalsIgnoreCase(args[0]) && "add".equalsIgnoreCase(args[1])) {
-        // No specific suggestions for bot_name, but can suggest something generic if needed
-        completions.add("MyBot"); // Example suggestion
+        completions.add("MyBot");
         return filter(completions, args[3]);
     }
 
@@ -357,3 +374,4 @@ public class AuthCommand implements CommandExecutor, TabCompleter {
         .toList();
   }
 }
+

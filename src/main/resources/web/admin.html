@@ -5,74 +5,172 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>管理控制台</title>
     <link rel="stylesheet" href="common.css">
+    <link rel="stylesheet" href="components.css">
     <link rel="stylesheet" href="admin.css">
 </head>
 <body>
     <div class="header">
-        <h1>插件管理控制台</h1>
-        <p>需要有效的 API Token 才能访问和操作。</p>
+        <div class="header-content">
+            <div>
+                <h1>插件管理控制台</h1>
+                <p>在此查询和管理玩家、假人及绑定信息</p>
+            </div>
+            <button class="btn-secondary" id="tokenBtn" aria-label="管理Token">
+                🔑 Token设置
+            </button>
+        </div>
     </div>
     <div class="container">
-        <div class="card" id="players-section">
-            <h2>已绑定玩家列表</h2>
-            <div class="table-container">
-                <table id="playersTable">
-                    <thead>
-                        <tr>
-                            <th>UUID</th>
-                            <th>玩家名</th>
-                            <th>QQ</th>
-                            <th>绑定时间</th>
-                            <th>操作</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <!-- Player data will be loaded here -->
-                    </tbody>
-                </table>
-            </div>
-            <p id="players-message"></p>
+        <!-- Query Section -->
+        <div class="card" id="query-section">
+            <h2>数据查询</h2>
+            <form id="queryForm">
+                <div class="form-group">
+                    <label for="queryKeyword">关键词</label>
+                    <input type="text" id="queryKeyword" required 
+                           placeholder="输入 QQ, 名称, UUID 等"
+                           autocomplete="off">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="queryBy">查询方式</label>
+                        <select id="queryBy">
+                            <option value="qq">QQ号</option>
+                            <option value="name">真人名称</option>
+                            <option value="uuid">真人UUID</option>
+                            <option value="bot_name">假人名称</option>
+                            <option value="bot_uuid">假人UUID</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="queryTarget">返回内容</label>
+                        <select id="queryTarget">
+                            <option value="all">所有信息</option>
+                            <option value="player">仅玩家信息</option>
+                            <option value="bots">仅假人列表</option>
+                            <option value="meta">仅元数据</option>
+                        </select>
+                    </div>
+                </div>
+                <button type="submit" class="button-primary" id="queryBtn">
+                    <span id="queryBtnText">查询</span>
+                </button>
+            </form>
         </div>
 
-        <div class="card" id="bots-section">
-            <h2>假人管理列表</h2>
-            <div class="table-container">
-                <table id="botsTable">
-                    <thead>
-                        <tr>
-                            <th>UUID</th>
-                            <th>假人名</th>
-                            <th>所属主人 UUID</th>
-                            <th>创建时间</th>
-                            <th>操作</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <!-- Bot data will be loaded here -->
-                    </tbody>
-                </table>
-            </div>
-            <p id="bots-message"></p>
+        <!-- Query Result Section -->
+        <div id="queryResult">
+            <!-- Dynamic content will be rendered here by admin.js -->
         </div>
 
+        <!-- Tables Section -->
+        <div class="card" id="tables-section">
+            <div class="tables-header">
+                <h2>数据列表</h2>
+                <div class="table-actions">
+                    <button class="btn-secondary" id="exportCsvBtn">📥 导出CSV</button>
+                    <label class="btn-secondary" for="importCsvInput" style="cursor: pointer; margin: 0;">
+                        📤 导入CSV
+                        <input type="file" id="importCsvInput" accept=".csv" style="display: none;">
+                    </label>
+                </div>
+            </div>
+            
+            <div class="tabs">
+                <button class="tab-btn active" data-tab="players">真人列表</button>
+                <button class="tab-btn" data-tab="bots">假人列表</button>
+            </div>
 
+            <!-- Players Table -->
+            <div class="tab-content active" id="players-tab">
+                <div class="table-controls">
+                    <input type="text" id="playersSearch" placeholder="搜索玩家名称、QQ、UUID..." class="search-input">
+                    <select id="playersPageSize" class="page-size-select">
+                        <option value="20">每页 20 条</option>
+                        <option value="50" selected>每页 50 条</option>
+                        <option value="100">每页 100 条</option>
+                    </select>
+                </div>
+                <div class="table-container">
+                    <table class="data-table" id="playersTable">
+                        <thead>
+                            <tr>
+                                <th>UUID</th>
+                                <th>名称</th>
+                                <th>QQ</th>
+                                <th>绑定时间</th>
+                                <th>假人数量</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="playersTableBody">
+                            <!-- Dynamic content -->
+                        </tbody>
+                    </table>
+                </div>
+                <div class="table-pagination" id="playersPagination">
+                    <!-- Dynamic pagination -->
+                </div>
+            </div>
 
+            <!-- Bots Table -->
+            <div class="tab-content" id="bots-tab">
+                <div class="table-controls">
+                    <input type="text" id="botsSearch" placeholder="搜索假人名称、所有者..." class="search-input">
+                    <select id="botsPageSize" class="page-size-select">
+                        <option value="20">每页 20 条</option>
+                        <option value="50" selected>每页 50 条</option>
+                        <option value="100">每页 100 条</option>
+                    </select>
+                </div>
+                <div class="table-container">
+                    <table class="data-table" id="botsTable">
+                        <thead>
+                            <tr>
+                                <th>假人名称</th>
+                                <th>假人UUID</th>
+                                <th>所有者名称</th>
+                                <th>所有者QQ</th>
+                                <th>创建时间</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="botsTableBody">
+                            <!-- Dynamic content -->
+                        </tbody>
+                    </table>
+                </div>
+                <div class="table-pagination" id="botsPagination">
+                    <!-- Dynamic pagination -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Admin Actions Section -->
         <div class="card">
-            <h2>添加/修改绑定</h2>
+            <h2>管理员操作</h2>
             <form id="bindForm">
                 <div class="form-group">
-                    <label for="playerIdentifier">玩家标识符 (名称或 UUID):</label>
-                    <input type="text" id="playerIdentifier" required>
+                    <label for="playerIdentifier">玩家标识符 (名称或 UUID)</label>
+                    <input type="text" id="playerIdentifier" required 
+                           placeholder="输入玩家名称或UUID"
+                           autocomplete="off">
                 </div>
                 <div class="form-group">
-                    <label for="qqNumber">QQ 号码:</label>
-                    <input type="number" id="qqNumber" required>
+                    <label for="qqNumber">QQ 号码</label>
+                    <input type="number" id="qqNumber" required 
+                           placeholder="请输入QQ号"
+                           min="10000" 
+                           max="999999999999">
+                    <span class="input-hint">请输入5-12位数字的QQ号</span>
                 </div>
-                <button type="submit" class="button-primary">提交绑定</button>
+                <button type="submit" class="button-primary" id="bindBtn">
+                    <span id="bindBtnText">提交绑定</span>
+                </button>
             </form>
-            <p id="bind-message"></p>
         </div>
     </div>
+    <script src="components.js"></script>
     <script src="admin.js"></script>
 </body>
 </html>

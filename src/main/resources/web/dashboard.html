@@ -4,39 +4,93 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>服务器看板</title>
+    <link rel="stylesheet" href="common.css">
+    <link rel="stylesheet" href="components.css">
     <link rel="stylesheet" href="dashboard.css">
 </head>
 <body>
     <div class="header">
-        <h1>服务器实时监控看板</h1>
+        <div class="header-content">
+            <h1>服务器实时监控看板</h1>
+            <div class="header-actions">
+                <button class="btn-secondary" id="refreshBtn" aria-label="手动刷新">
+                    <span id="refreshIcon">🔄</span>
+                    <span id="refreshText">刷新</span>
+                </button>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="autoRefreshToggle" checked>
+                    <span class="toggle-slider"></span>
+                    <span class="toggle-label">自动刷新</span>
+                </label>
+            </div>
+        </div>
+        <p id="lastUpdate">最后更新: --</p>
     </div>
     <div class="container">
         <div class="card">
-            <h2>TPS (Ticks Per Second)</h2>
-            <p id="tps-value">加载中...</p>
+            <div class="card-header">
+                <h2>TPS (Ticks Per Second)</h2>
+                <span class="card-badge" id="tps-badge">--</span>
+            </div>
+            <p id="tps-value" class="metric-value">加载中...</p>
             <div class="chart-container">
                 <canvas id="tpsChart"></canvas>
             </div>
         </div>
+        
         <div class="card">
-            <h2>内存占用</h2>
-            <div class="progress-bar-container">
-                <div class="progress-bar" id="memory-progress"></div>
+            <div class="card-header">
+                <h2>内存占用</h2>
             </div>
-            <p id="memory-value">加载中...</p>
+            <div class="progress-bar-container">
+                <div class="progress-bar" id="memory-progress">
+                    <div class="progress-label" id="memory-label">0%</div>
+                </div>
+            </div>
+            <p id="memory-value" class="metric-value">加载中...</p>
         </div>
+        
         <div class="card">
-            <h2>在线玩家</h2>
-            <div class="progress-bar-container">
-                <div class="progress-bar" id="players-progress"></div>
+            <div class="card-header">
+                <h2>在线玩家</h2>
             </div>
-            <p id="players-value">加载中...</p>
-            <ul id="online-players-list">
-                <!-- Online player IDs will be listed here -->
-            </ul>
+            <div class="progress-bar-container">
+                <div class="progress-bar" id="players-progress">
+                    <div class="progress-label" id="players-label">0%</div>
+                </div>
+            </div>
+            <p id="players-value" class="metric-value">加载中...</p>
+            <div id="online-players-container">
+                <ul id="online-players-list" class="players-list">
+                    <!-- Online player IDs will be listed here -->
+                </ul>
+            </div>
+        </div>
+        
+        <div class="card" id="bots-card">
+            <div class="card-header">
+                <h2>我的假人 (Bots)</h2>
+            </div>
+            <div id="bots-login-prompt" class="empty-state" style="display: none;">
+                <div class="empty-state-icon">🤖</div>
+                <p>请先登录以管理假人</p>
+                <button class="btn-secondary" onclick="location.href='profile.html'">前往登录</button>
+            </div>
+            <div id="bots-content" style="display: none;">
+                <ul id="bots-list" class="bots-list">
+                    <!-- Bots will be listed here -->
+                </ul>
+                <form id="add-bot-form" class="bot-form">
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <input type="text" id="bot-name-input" placeholder="输入假人ID" required>
+                        <button type="submit" class="btn">添加假人</button>
+                    </div>
+                </form>
+            </div>
         </div>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="components.js"></script>
     <script src="dashboard.js"></script>
 </body>
 </html>

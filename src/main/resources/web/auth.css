@@ -1,5 +1,3 @@
-@import 'common.css';
-
 /* auth.css - Specific styles for auth.html and success.html */
 
 body {
@@ -7,37 +5,113 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    height: 100vh;
+    min-height: 100vh;
+    padding: 16px;
 }
 
 .container {
+    width: 100%;
     max-width: 480px;
-    padding: 0;
 }
 
-.card, .success-container {
-    background-color: var(--surface-color);
-    border-radius: var(--radius);
-    box-shadow: var(--shadow-2); /* Slightly elevated for login */
-    padding: 40px;
+.card {
+    padding: 32px;
 }
 
 h1 {
     text-align: center;
-    margin-bottom: 16px;
+    margin-bottom: 8px;
     font-size: 1.75rem;
 }
 
-p {
+.card > p {
     text-align: center;
     margin-bottom: 32px;
+    color: var(--text-secondary);
 }
 
-.btn, .btn-return {
+.btn {
     width: 100%;
-    margin-top: 16px;
+    margin-top: 8px;
+}
+
+/* Success page styles */
+.success-container {
+    text-align: center;
+    background-color: var(--surface-color);
+    padding: 48px 32px;
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-2);
+    max-width: 500px;
+    margin: 0 auto;
+}
+
+.success-icon {
+    width: 80px;
+    height: 80px;
+    margin: 0 auto 24px;
+    background-color: rgba(24, 128, 56, 0.1);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 48px;
+    color: var(--success-color);
+    font-weight: bold;
+    animation: success-scale 0.5s ease-out;
+}
+
+@keyframes success-scale {
+    0% {
+        transform: scale(0);
+        opacity: 0;
+    }
+    50% {
+        transform: scale(1.1);
+    }
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
 }
 
 .success-container h1 {
     color: var(--success-color);
+    font-size: 2rem;
+    margin-bottom: 16px;
+    font-weight: 500;
+}
+
+.success-container p {
+    font-size: 1rem;
+    color: var(--text-secondary);
+    margin-bottom: 32px;
+    line-height: 1.6;
+}
+
+.success-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.success-actions .btn,
+.success-actions .btn-secondary {
+    min-width: 120px;
+}
+
+/* Mobile optimizations */
+@media (max-width: 600px) {
+    .card {
+        padding: 24px 20px;
+    }
+    
+    .success-container {
+        padding: 32px 24px;
+    }
+    
+    .success-container h1 {
+        font-size: 2rem;
+    }
 }

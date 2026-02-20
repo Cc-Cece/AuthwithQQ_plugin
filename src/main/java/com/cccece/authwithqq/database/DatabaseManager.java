@@ -52,6 +52,18 @@ public class DatabaseManager {
           + "meta_value TEXT, "
           + "PRIMARY KEY(uuid, meta_key)"
           + ")");
+      // Table for bots
+      stmt.execute("CREATE TABLE IF NOT EXISTS auth_bots ("
+          + "bot_uuid VARCHAR(36) PRIMARY KEY, "
+          + "bot_name VARCHAR(32), "
+          + "owner_uuid VARCHAR(36), "
+          + "created_at LONG"
+          + ")");
+      // Index for owner_uuid in auth_bots
+      stmt.execute("CREATE INDEX IF NOT EXISTS idx_auth_bots_owner ON auth_bots(owner_uuid)");
+      // Ensure indexes on auth_players
+      stmt.execute("CREATE INDEX IF NOT EXISTS idx_auth_players_name ON auth_players(name)");
+      stmt.execute("CREATE INDEX IF NOT EXISTS idx_auth_players_qq ON auth_players(qq)");
     } catch (SQLException e) {
       logger.log(Level.SEVERE, "Could not initialize database", e);
     }
@@ -77,6 +89,43 @@ public class DatabaseManager {
       pstmt.executeUpdate();
     } catch (SQLException e) {
       logger.log(Level.SEVERE, "Could not add guest", e);
+    }
+  }
+
+  /**
+   * Deletes a player and all their associated metadata and bots.
+   *
+   * @param uuid The player's UUID.
+   */
+  public void deletePlayer(UUID uuid) {
+    String uuidStr = uuid.toString();
+    try (Connection conn = getConnection()) {
+      conn.setAutoCommit(false);
+      try {
+        // Delete from auth_players
+        try (PreparedStatement pstmt = conn.prepareStatement("DELETE FROM auth_players WHERE uuid = ?")) {
+          pstmt.setString(1, uuidStr);
+          pstmt.executeUpdate();
+        }
+        // Delete from player_meta
+        try (PreparedStatement pstmt = conn.prepareStatement("DELETE FROM player_meta WHERE uuid = ?")) {
+          pstmt.setString(1, uuidStr);
+          pstmt.executeUpdate();
+        }
+        // Delete associated bots from auth_bots
+        try (PreparedStatement pstmt = conn.prepareStatement("DELETE FROM auth_bots WHERE owner_uuid = ?")) {
+          pstmt.setString(1, uuidStr);
+          pstmt.executeUpdate();
+        }
+        conn.commit();
+      } catch (SQLException e) {
+        conn.rollback();
+        throw e;
+      } finally {
+        conn.setAutoCommit(true);
+      }
+    } catch (SQLException e) {
+      logger.log(Level.SEVERE, "Could not delete player", e);
     }
   }
 
@@ -256,11 +305,30 @@ public class DatabaseManager {
 
   /**
    * Gets a player's name by their UUID.
+   * For bots, returns the bot name from auth_bots table.
+   * For real players, returns the name from auth_players table.
    *
    * @param uuid The player's UUID.
    * @return The name, or null if not found.
    */
   public String getNameByUuid(UUID uuid) {
+    // First check if it's a bot
+    if (isBot(uuid)) {
+      String sql = "SELECT bot_name FROM auth_bots WHERE bot_uuid = ?";
+      try (Connection conn = getConnection();
+           PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        pstmt.setString(1, uuid.toString());
+        try (ResultSet rs = pstmt.executeQuery()) {
+          if (rs.next()) {
+            return rs.getString("bot_name");
+          }
+        }
+      } catch (SQLException e) {
+        logger.log(Level.SEVERE, "Could not get bot name by UUID", e);
+      }
+    }
+    
+    // If not a bot or bot name not found, try auth_players table
     String sql = "SELECT name FROM auth_players WHERE uuid = ?";
     try (Connection conn = getConnection();
          PreparedStatement pstmt = conn.prepareStatement(sql)) {
@@ -357,10 +425,16 @@ public class DatabaseManager {
    * @param botName The name of the bot.
    */
   public void markPlayerAsBot(UUID botUuid, UUID ownerUuid, String botName) {
-    addGuest(botUuid, botName); // Ensure the bot is in auth_players table
-    setMeta(botUuid, "bot.is_bot", "true");
-    if (ownerUuid != null) {
-      setMeta(botUuid, "bot.owner_uuid", ownerUuid.toString());
+    String sql = "INSERT OR REPLACE INTO auth_bots (bot_uuid, bot_name, owner_uuid, created_at) VALUES (?, ?, ?, ?)";
+    try (Connection conn = getConnection();
+         PreparedStatement pstmt = conn.prepareStatement(sql)) {
+      pstmt.setString(1, botUuid.toString());
+      pstmt.setString(2, botName);
+      pstmt.setString(3, ownerUuid != null ? ownerUuid.toString() : null);
+      pstmt.setLong(4, System.currentTimeMillis());
+      pstmt.executeUpdate();
+    } catch (SQLException e) {
+      logger.log(Level.SEVERE, "Could not mark player as bot in auth_bots", e);
     }
   }
 
@@ -371,7 +445,7 @@ public class DatabaseManager {
    * @return The count of bots for the owner.
    */
   public int getBotCountForOwner(UUID ownerUuid) {
-    String sql = "SELECT COUNT(DISTINCT uuid) FROM player_meta WHERE meta_key = 'bot.owner_uuid' AND meta_value = ?";
+    String sql = "SELECT COUNT(*) FROM auth_bots WHERE owner_uuid = ?";
     try (Connection conn = getConnection();
          PreparedStatement pstmt = conn.prepareStatement(sql)) {
       pstmt.setString(1, ownerUuid.toString());
@@ -393,7 +467,7 @@ public class DatabaseManager {
    * @return true if the UUID is associated with a bot, false otherwise.
    */
   public boolean isBot(UUID uuid) {
-    String sql = "SELECT COUNT(*) FROM player_meta WHERE uuid = ? AND meta_key = 'bot.is_bot' AND meta_value = 'true'";
+    String sql = "SELECT COUNT(*) FROM auth_bots WHERE bot_uuid = ?";
     try (Connection conn = getConnection();
          PreparedStatement pstmt = conn.prepareStatement(sql)) {
       pstmt.setString(1, uuid.toString());
@@ -409,29 +483,18 @@ public class DatabaseManager {
   }
 
   /**
-   * Deletes a bot and its associated metadata.
+   * Deletes a bot from the auth_bots table.
    *
    * @param botUuid The UUID of the bot to delete.
    */
   public void deleteBot(UUID botUuid) {
-    // Delete bot's metadata
-    String sqlMeta = "DELETE FROM player_meta WHERE uuid = ?";
+    String sql = "DELETE FROM auth_bots WHERE bot_uuid = ?";
     try (Connection conn = getConnection();
-         PreparedStatement pstmt = conn.prepareStatement(sqlMeta)) {
+         PreparedStatement pstmt = conn.prepareStatement(sql)) {
       pstmt.setString(1, botUuid.toString());
       pstmt.executeUpdate();
     } catch (SQLException e) {
-      logger.log(Level.SEVERE, "Could not delete bot metadata", e);
-    }
-
-    // Delete bot from auth_players table
-    String sqlPlayer = "DELETE FROM auth_players WHERE uuid = ?";
-    try (Connection conn = getConnection();
-         PreparedStatement pstmt = conn.prepareStatement(sqlPlayer)) { // Corrected line
-      pstmt.setString(1, botUuid.toString());
-      pstmt.executeUpdate();
-    } catch (SQLException e) {
-      logger.log(Level.SEVERE, "Could not delete bot from auth_players", e);
+      logger.log(Level.SEVERE, "Could not delete bot from auth_bots", e);
     }
   }
 
@@ -442,13 +505,14 @@ public class DatabaseManager {
    * @return The owner's UUID, or null if not found or not a bot.
    */
   public UUID getBotOwner(UUID botUuid) {
-    String sql = "SELECT meta_value FROM player_meta WHERE uuid = ? AND meta_key = 'bot.owner_uuid'";
+    String sql = "SELECT owner_uuid FROM auth_bots WHERE bot_uuid = ?";
     try (Connection conn = getConnection();
          PreparedStatement pstmt = conn.prepareStatement(sql)) {
       pstmt.setString(1, botUuid.toString());
       try (ResultSet rs = pstmt.executeQuery()) {
         if (rs.next()) {
-          return UUID.fromString(rs.getString("meta_value"));
+          String ownerUuidStr = rs.getString("owner_uuid");
+          return ownerUuidStr != null ? UUID.fromString(ownerUuidStr) : null;
         }
       }
     } catch (SQLException e) {
@@ -456,4 +520,118 @@ public class DatabaseManager {
     }
     return null;
   }
+
+  /**
+   * Gets all bots associated with a specific owner UUID.
+   *
+   * @param ownerUuid The UUID of the owner player.
+   * @return A list of maps, each containing bot data.
+   */
+  public List<Map<String, String>> getBotsByOwner(UUID ownerUuid) {
+    List<Map<String, String>> bots = new ArrayList<>();
+    String sql = "SELECT * FROM auth_bots WHERE owner_uuid = ?";
+    try (Connection conn = getConnection();
+         PreparedStatement pstmt = conn.prepareStatement(sql)) {
+      pstmt.setString(1, ownerUuid.toString());
+      try (ResultSet rs = pstmt.executeQuery()) {
+        while (rs.next()) {
+          Map<String, String> botMap = new HashMap<>();
+          botMap.put("bot_uuid", rs.getString("bot_uuid"));
+          botMap.put("bot_name", rs.getString("bot_name"));
+          botMap.put("owner_uuid", rs.getString("owner_uuid"));
+          botMap.put("created_at", String.valueOf(rs.getLong("created_at")));
+          bots.add(botMap);
+        }
+      }
+    } catch (SQLException e) {
+      logger.log(Level.SEVERE, "Could not get bots by owner", e);
+    }
+    return bots;
+  }
+
+  /**
+   * Gets a bot's owner UUID by its name.
+   *
+   * @param botName The name of the bot.
+   * @return The owner's UUID, or null if not found.
+   */
+  public UUID getOwnerByBotName(String botName) {
+    String sql = "SELECT owner_uuid FROM auth_bots WHERE bot_name = ?";
+    try (Connection conn = getConnection();
+         PreparedStatement pstmt = conn.prepareStatement(sql)) {
+      pstmt.setString(1, botName);
+      try (ResultSet rs = pstmt.executeQuery()) {
+        if (rs.next()) {
+          String ownerUuidStr = rs.getString("owner_uuid");
+          return ownerUuidStr != null ? UUID.fromString(ownerUuidStr) : null;
+        }
+      }
+    } catch (SQLException e) {
+      logger.log(Level.SEVERE, "Could not get owner by bot name", e);
+    }
+    return null;
+  }
+
+  /**
+   * Gets a bot's owner UUID by its UUID.
+   *
+   * @param botUuid The UUID of the bot.
+   * @return The owner's UUID, or null if not found.
+   */
+  public UUID getOwnerByBotUuid(UUID botUuid) {
+    return getBotOwner(botUuid);
+  }
+
+  /**
+   * Gets a bot's UUID by its name.
+   *
+   * @param botName The name of the bot.
+   * @return The bot's UUID, or null if not found.
+   */
+  public UUID getBotUuidByName(String botName) {
+    String sql = "SELECT bot_uuid FROM auth_bots WHERE bot_name = ?";
+    try (Connection conn = getConnection();
+         PreparedStatement pstmt = conn.prepareStatement(sql)) {
+      pstmt.setString(1, botName);
+      try (ResultSet rs = pstmt.executeQuery()) {
+        if (rs.next()) {
+          return UUID.fromString(rs.getString("bot_uuid"));
+        }
+      }
+    } catch (SQLException e) {
+      logger.log(Level.SEVERE, "Could not get bot UUID by name", e);
+    }
+    return null;
+  }
+
+  /**
+   * Gets all bots with their owner information.
+   *
+   * @return A list of maps, each containing bot data with owner information.
+   */
+  public List<Map<String, String>> getAllBotsData() {
+    List<Map<String, String>> bots = new ArrayList<>();
+    String sql = "SELECT b.bot_uuid, b.bot_name, b.owner_uuid, b.created_at, "
+        + "p.name as owner_name, p.qq as owner_qq "
+        + "FROM auth_bots b "
+        + "LEFT JOIN auth_players p ON b.owner_uuid = p.uuid";
+    try (Connection conn = getConnection();
+         Statement stmt = conn.createStatement();
+         ResultSet rs = stmt.executeQuery(sql)) {
+      while (rs.next()) {
+        Map<String, String> botMap = new HashMap<>();
+        botMap.put("bot_uuid", rs.getString("bot_uuid"));
+        botMap.put("bot_name", rs.getString("bot_name"));
+        botMap.put("owner_uuid", rs.getString("owner_uuid"));
+        botMap.put("created_at", String.valueOf(rs.getLong("created_at")));
+        botMap.put("owner_name", rs.getString("owner_name"));
+        botMap.put("owner_qq", rs.getString("owner_qq") != null ? String.valueOf(rs.getLong("owner_qq")) : "0");
+        bots.add(botMap);
+      }
+    } catch (SQLException e) {
+      logger.log(Level.SEVERE, "Could not get all bots data", e);
+    }
+    return bots;
+  }
 }
+

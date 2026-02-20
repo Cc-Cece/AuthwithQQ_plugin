@@ -4,58 +4,21 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>绑定成功</title>
-    <link rel="stylesheet" href="auth.css"> <!-- Reusing auth.css for basic styling -->
-    <style>
-        body {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            background-color: #f4f4f4;
-            margin: 0;
-            font-family: Arial, sans-serif;
-            color: #333;
-        }
-        .success-container {
-            text-align: center;
-            background-color: #fff;
-            padding: 50px;
-            border-radius: 8px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-            max-width: 600px;
-            width: 90%;
-        }
-        .success-container h1 {
-            color: #28a745; /* Green color for success */
-            font-size: 3em;
-            margin-bottom: 20px;
-        }
-        .success-container p {
-            font-size: 1.2em;
-            color: #555;
-            margin-bottom: 30px;
-        }
-        .success-container .btn-return {
-            background-color: #007bff;
-            color: white;
-            padding: 10px 20px;
-            border: none;
-            border-radius: 5px;
-            text-decoration: none;
-            font-size: 1.1em;
-            cursor: pointer;
-            transition: background-color 0.3s ease;
-        }
-        .success-container .btn-return:hover {
-            background-color: #0056b3;
-        }
-    </style>
+    <link rel="stylesheet" href="common.css">
+    <link rel="stylesheet" href="components.css">
+    <link rel="stylesheet" href="auth.css">
 </head>
 <body>
-    <div class="success-container">
-        <h1>🎉 绑定成功！</h1>
-        <p>您的账号已成功绑定。请返回游戏享受乐趣。</p>
-        <a href="javascript:history.back()" class="btn-return">返回</a>
+    <div class="container">
+        <div class="success-container">
+            <div class="success-icon">✓</div>
+            <h1>绑定成功！</h1>
+            <p>您的账号已成功绑定。请返回游戏享受乐趣。</p>
+            <div class="success-actions">
+                <button class="btn" onclick="window.close()">关闭窗口</button>
+                <button class="btn-secondary" onclick="history.back()">返回</button>
+            </div>
+        </div>
     </div>
 </body>
 </html>

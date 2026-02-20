@@ -186,3 +186,127 @@ input[readonly] {
     text-align: center;
     padding: 16px;
 }
+
+/* Input validation states */
+input.error {
+    border-color: var(--error-color) !important;
+    box-shadow: 0 0 0 2px rgba(217, 48, 37, 0.2) !important;
+}
+
+input.success {
+    border-color: var(--success-color) !important;
+}
+
+.input-hint {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    margin-top: 4px;
+    display: block;
+}
+
+.input-error {
+    font-size: 0.75rem;
+    color: var(--error-color);
+    margin-top: 4px;
+    display: block;
+}
+
+/* Code display */
+.code-display {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px;
+    background-color: #f8f9fa;
+    border-radius: var(--radius);
+    border: 2px dashed var(--border-color);
+}
+
+.code-value {
+    font-family: 'Courier New', monospace;
+    font-size: 1.5rem;
+    font-weight: bold;
+    letter-spacing: 4px;
+    color: var(--primary-color);
+    flex: 1;
+    text-align: center;
+}
+
+.btn-copy {
+    flex-shrink: 0;
+    padding: 8px 16px;
+    font-size: 0.875rem;
+}
+
+/* Countdown timer */
+.countdown {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    margin-top: 8px;
+}
+
+.countdown.expiring {
+    color: var(--error-color);
+    font-weight: 500;
+}
+
+/* Empty state */
+.empty-state {
+    text-align: center;
+    padding: 48px 24px;
+    color: var(--text-secondary);
+}
+
+.empty-state-icon {
+    font-size: 48px;
+    margin-bottom: 16px;
+    opacity: 0.5;
+}
+
+/* Mobile optimizations */
+@media (max-width: 600px) {
+    .container {
+        padding: 16px;
+    }
+    
+    .card {
+        padding: 16px;
+        margin-bottom: 16px;
+    }
+    
+    .btn, .button-primary {
+        min-height: 44px; /* Touch target size */
+        padding: 12px 24px;
+    }
+    
+    .btn-secondary, .btn-edit, .btn-unbind {
+        min-height: 36px;
+        padding: 8px 16px;
+    }
+    
+    h1 {
+        font-size: 1.75rem;
+    }
+    
+    h2 {
+        font-size: 1.25rem;
+    }
+}
+
+/* Accessibility */
+@media (prefers-reduced-motion: reduce) {
+    * {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+/* Focus visible for keyboard navigation */
+*:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+}

@@ -28,33 +28,50 @@ document.addEventListener('DOMContentLoaded', () => {
     uuidInput.value = playerUuid;
     apiTokenInput.value = apiToken;
 
+    // Store profile data globally for form submission
+    let profile = null;
+
     // --- Fetch player profile data and custom field definitions ---
     function fetchPlayerProfileAndMeta() {
         loadingElement.style.display = 'block';
-        Promise.all([
-            fetch(`/api/profile?uuid=${playerUuid}`, { headers: { 'X-API-Token': apiToken } }),
-            fetch('/api/meta') // Fetch custom field definitions
-        ])
-        .then(async ([profileResponse, metaResponse]) => {
-            if (profileResponse.status === 401 || metaResponse.status === 401) {
+        // First fetch profile to determine player type
+        fetch(`/api/profile?uuid=${playerUuid}`, { headers: { 'X-API-Token': apiToken } })
+        .then(async (profileResponse) => {
+            if (profileResponse.status === 401) {
                 throw new Error('Unauthorized. 请检查您的 API Token。');
             }
-            const profile = await profileResponse.json();
-            const customFieldsDefs = await metaResponse.json();
+            profile = await profileResponse.json();
 
+            // Determine player type
+            const isBot = profile.meta && profile.meta["bot.is_bot"] === "true";
+            const fieldType = isBot ? "bot" : "player";
+
+            // Fetch custom field definitions based on player type
+            return fetch(`/api/meta?type=${fieldType}`, { headers: { 'X-API-Token': apiToken } })
+                .then(async (metaResponse) => {
+                    if (metaResponse.status === 401) {
+                        throw new Error('Unauthorized. 请检查您的 API Token。');
+                    }
+                    const customFieldsDefs = await metaResponse.json();
+                    return { profile, customFieldsDefs, isBot };
+                });
+        })
+        .then(({ profile, customFieldsDefs, isBot }) => {
             // Populate basic info
-            playerInfoElement.textContent = `当前编辑: ${profile.name} (${profile.uuid})`;
-            playerNameInput.value = profile.name;
-            currentQqInput.value = profile.qq;
-            newQqInput.value = profile.qq; // Pre-fill new QQ with current QQ
+            playerInfoElement.textContent = `当前编辑: ${profile.name || 'Unknown'} (${profile.uuid})`;
+            playerNameInput.value = profile.name || '';
+            currentQqInput.value = profile.qq || 0;
+            newQqInput.value = profile.qq || 0; // Pre-fill new QQ with current QQ
 
             // Toggle UI for Bot or Real Player
-            const isBot = profile.meta && profile.meta["bot.is_bot"] === "true";
             if (isBot) {
                 document.title = "编辑假人资料";
                 document.querySelector('h1').innerText = "编辑假人资料";
                 realPlayerOnlyElements.forEach(el => el.style.display = 'none');
                 botOnlyElements.forEach(el => el.style.display = 'block');
+                // Make player name editable for bots
+                playerNameInput.readOnly = false;
+                playerNameInput.placeholder = "假人名称";
                 if (profile.meta && profile.meta["bot.owner_uuid"]) {
                     ownerUuidInput.value = profile.meta["bot.owner_uuid"];
                 }
@@ -63,35 +80,39 @@ document.addEventListener('DOMContentLoaded', () => {
                 document.querySelector('h1').innerText = "编辑玩家资料";
                 realPlayerOnlyElements.forEach(el => el.style.display = 'block');
                 botOnlyElements.forEach(el => el.style.display = 'none');
+                // Keep player name read-only for real players
+                playerNameInput.readOnly = true;
             }
 
             // Clear previous custom fields
             customFieldsContainer.innerHTML = '';
 
             // Dynamically create and populate custom fields
-            customFieldsDefs.forEach(fieldDef => {
-                const formGroup = document.createElement('div');
-                formGroup.className = 'form-group';
+            if (Array.isArray(customFieldsDefs) && customFieldsDefs.length > 0) {
+                customFieldsDefs.forEach(fieldDef => {
+                    const formGroup = document.createElement('div');
+                    formGroup.className = 'form-group';
 
-                const label = document.createElement('label');
-                label.setAttribute('for', fieldDef.name);
-                label.textContent = fieldDef.label + ':';
-                formGroup.appendChild(label);
+                    const label = document.createElement('label');
+                    label.setAttribute('for', fieldDef.name);
+                    label.textContent = fieldDef.label + ':';
+                    formGroup.appendChild(label);
 
-                const input = document.createElement('input');
-                input.setAttribute('type', fieldDef.type || 'text');
-                input.setAttribute('id', fieldDef.name);
-                input.setAttribute('name', fieldDef.name);
-                if (fieldDef.required) {
-                    input.setAttribute('required', 'true');
-                }
-                // Pre-fill with existing meta data
-                if (profile.meta && profile.meta[fieldDef.name]) {
-                    input.value = profile.meta[fieldDef.name];
-                }
-                formGroup.appendChild(input);
-                customFieldsContainer.appendChild(formGroup);
-            });
+                    const input = document.createElement('input');
+                    input.setAttribute('type', fieldDef.type || 'text');
+                    input.setAttribute('id', fieldDef.name);
+                    input.setAttribute('name', fieldDef.name);
+                    if (fieldDef.required) {
+                        input.setAttribute('required', 'true');
+                    }
+                    // Pre-fill with existing meta data
+                    if (profile.meta && profile.meta[fieldDef.name]) {
+                        input.value = profile.meta[fieldDef.name];
+                    }
+                    formGroup.appendChild(input);
+                    customFieldsContainer.appendChild(formGroup);
+                });
+            }
         })
         .catch(error => {
             console.error('Error fetching player profile or meta:', error);
@@ -115,13 +136,21 @@ document.addEventListener('DOMContentLoaded', () => {
             meta: {}
         };
 
+        // Check if this is a bot
+        const isBot = profile && profile.meta && profile.meta["bot.is_bot"] === "true";
+        
+        // If it's a bot, update bot name if changed
+        if (isBot && playerNameInput.value && playerNameInput.value !== profile.name) {
+            data.meta["bot.bot_name"] = playerNameInput.value;
+        }
+
         // Collect custom field data from container
         customFieldsContainer.querySelectorAll('input').forEach(input => {
              data.meta[input.name] = input.value;
         });
 
         // Collect ownerUuid if it's a bot
-        if (ownerUuidInput && ownerUuidInput.value) {
+        if (isBot && ownerUuidInput && ownerUuidInput.value) {
             data.meta["bot.owner_uuid"] = ownerUuidInput.value;
         }
         

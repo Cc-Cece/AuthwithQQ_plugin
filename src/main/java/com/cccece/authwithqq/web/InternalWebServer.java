@@ -70,6 +70,12 @@ public class InternalWebServer {
       server.createContext("/api/profile", new ProfileViewHandler()); // New: API for viewing player profile
       server.createContext("/api/profile/update", new ProfileUpdateHandler()); // New: API for updating player profile
       server.createContext("/api/query", new QueryHandler()); // New: API for querying player data
+      server.createContext("/api/user/bots", new UserBotsHandler());
+      server.createContext("/api/user/bot/bind", new UserBotBindHandler());
+      server.createContext("/api/user/bot/unbind", new UserBotUnbindHandler());
+      server.createContext("/api/bots", new AllBotsHandler()); // New: Get all bots
+      server.createContext("/api/csv/export", new CsvExportHandler()); // New: Export CSV
+      server.createContext("/api/csv/import", new CsvImportHandler()); // New: Import CSV
       server.createContext("/", new RedirectHandler("/web/dashboard.html")); // Redirect to dashboard
       server.createContext("/dashboard", new RedirectHandler("/web/dashboard.html")); // Explicit dashboard route
       server.createContext("/admin", new AuthenticatedRedirectHandler("/web/admin.html")); // Admin console
@@ -360,7 +366,29 @@ public class InternalWebServer {
   private class MetaHandler implements HttpHandler {
     @Override
     public void handle(HttpExchange exchange) throws IOException {
-      List<Map<?, ?>> customFields = plugin.getConfig().getMapList("binding.custom-fields");
+      // Get type parameter from query string (player, bot, or null for all)
+      Map<String, String> query = AuthWithQqPlugin.parseQuery(exchange.getRequestURI().getQuery());
+      String type = query != null ? query.get("type") : null; // "player" or "bot"
+      
+      List<Map<?, ?>> customFields = new java.util.ArrayList<>();
+      
+      // Check if new format (classified) exists
+      if (plugin.getConfig().isConfigurationSection("binding.custom-fields.player") ||
+          plugin.getConfig().isConfigurationSection("binding.custom-fields.bot")) {
+        // New format: classified fields
+        if ("player".equals(type)) {
+          customFields = plugin.getConfig().getMapList("binding.custom-fields.player");
+        } else if ("bot".equals(type)) {
+          customFields = plugin.getConfig().getMapList("binding.custom-fields.bot");
+        } else {
+          // No type specified or type is invalid, return empty array
+          // Frontend should specify type explicitly
+          customFields = new java.util.ArrayList<>();
+        }
+      } else {
+        // Old format: flat list (backward compatibility)
+        customFields = plugin.getConfig().getMapList("binding.custom-fields");
+      }
       
       com.google.gson.JsonArray jsonArray = new com.google.gson.JsonArray();
       for (Map<?, ?> field : customFields) {
@@ -424,6 +452,9 @@ public class InternalWebServer {
 
         // Database modification (set QQ to 0)
         plugin.getDatabaseManager().updateBinding(uuid, 0L);
+        // Delete all bots owned by this player
+        plugin.getDatabaseManager().deletePlayer(uuid);
+
 
         // In-game synchronization
         Bukkit.getScheduler().runTask(plugin, () -> {
@@ -447,6 +478,9 @@ public class InternalWebServer {
   private class BotBindHandler implements HttpHandler {
     @Override
     public void handle(HttpExchange exchange) throws IOException {
+        if (!authenticate(exchange)) {
+            return;
+        }
       if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
         sendResponse(exchange, 405, "Method not allowed");
         return;
@@ -671,17 +705,52 @@ public class InternalWebServer {
       try {
         Future<JsonObject> future = Bukkit.getScheduler().callSyncMethod(plugin, () -> {
           JsonObject json = new JsonObject();
-          long qq = plugin.getDatabaseManager().getQq(finalUuid);
-          String name = plugin.getDatabaseManager().getNameByUuid(finalUuid);
-          Map<String, String> meta = plugin.getDatabaseManager().getAllMeta(finalUuid);
           
-          json.addProperty("uuid", finalUuid.toString());
-          json.addProperty("name", name);
-          json.addProperty("qq", qq);
+          // Check if this is a bot
+          boolean isBot = plugin.getDatabaseManager().isBot(finalUuid);
+          
+          if (isBot) {
+            // For bots, get data from auth_bots table
+            UUID ownerUuid = plugin.getDatabaseManager().getBotOwner(finalUuid);
+            String botName = plugin.getDatabaseManager().getNameByUuid(finalUuid); // This will get bot_name for bots
+            Map<String, String> meta = plugin.getDatabaseManager().getAllMeta(finalUuid);
+            
+            json.addProperty("uuid", finalUuid.toString());
+            json.addProperty("name", botName != null ? botName : "Unknown Bot");
+            json.addProperty("qq", 0); // Bots don't have QQ
+            
+            // Add bot-specific meta
+            JsonObject metaJson = new JsonObject();
+            meta.forEach(metaJson::addProperty);
+            metaJson.addProperty("bot.is_bot", "true");
+            if (ownerUuid != null) {
+              metaJson.addProperty("bot.owner_uuid", ownerUuid.toString());
+              // Get owner name and QQ
+              String ownerName = plugin.getDatabaseManager().getNameByUuid(ownerUuid);
+              long ownerQq = plugin.getDatabaseManager().getQq(ownerUuid);
+              if (ownerName != null) {
+                metaJson.addProperty("bot.owner_name", ownerName);
+              }
+              if (ownerQq != 0) {
+                metaJson.addProperty("bot.owner_qq", String.valueOf(ownerQq));
+              }
+            }
+            json.add("meta", metaJson);
+          } else {
+            // For real players, get data from auth_players table
+            long qq = plugin.getDatabaseManager().getQq(finalUuid);
+            String name = plugin.getDatabaseManager().getNameByUuid(finalUuid);
+            Map<String, String> meta = plugin.getDatabaseManager().getAllMeta(finalUuid);
+            
+            json.addProperty("uuid", finalUuid.toString());
+            json.addProperty("name", name != null ? name : "Unknown Player");
+            json.addProperty("qq", qq);
 
-          JsonObject metaJson = new JsonObject();
-          meta.forEach(metaJson::addProperty);
-          json.add("meta", metaJson);
+            JsonObject metaJson = new JsonObject();
+            meta.forEach(metaJson::addProperty);
+            json.add("meta", metaJson);
+          }
+          
           return json;
         });
         JsonObject profileData = future.get();
@@ -739,22 +808,65 @@ public class InternalWebServer {
         }
 
         final UUID finalUuid = uuidToUpdate; // For use in lambda
-        long newQq = body.get("qq").getAsLong();
-        JsonObject meta = body.getAsJsonObject("meta");
+        long newQq = body.has("qq") ? body.get("qq").getAsLong() : 0;
+        JsonObject meta = body.has("meta") ? body.getAsJsonObject("meta") : new JsonObject();
 
         Future<Boolean> future = Bukkit.getScheduler().callSyncMethod(plugin, () -> {
-          plugin.getDatabaseManager().updateBinding(finalUuid, newQq); // Update QQ
-
-          // Update custom meta fields
-          for (Map.Entry<String, com.google.gson.JsonElement> entry : meta.entrySet()) {
-            // Remove meta field if value is null or empty string
-            if (entry.getValue().isJsonNull() || (entry.getValue().isJsonPrimitive() && entry.getValue().getAsString().isEmpty())) {
-                plugin.getDatabaseManager().deleteMeta(finalUuid, entry.getKey());
-            } else {
-                plugin.getDatabaseManager().setMeta(finalUuid, entry.getKey(), entry.getValue().getAsString());
+          // Check if this is a bot
+          boolean isBot = plugin.getDatabaseManager().isBot(finalUuid);
+          
+          if (isBot) {
+            // For bots, update bot-specific fields
+            if (meta.has("bot.owner_uuid")) {
+              String ownerUuidStr = meta.get("bot.owner_uuid").getAsString();
+              UUID ownerUuid = null;
+              if (ownerUuidStr != null && !ownerUuidStr.isEmpty()) {
+                try {
+                  ownerUuid = UUID.fromString(ownerUuidStr);
+                } catch (IllegalArgumentException e) {
+                  plugin.getLogger().warning("Invalid owner UUID format: " + ownerUuidStr);
+                }
+              }
+              // Get bot name to update
+              String botName = plugin.getDatabaseManager().getNameByUuid(finalUuid);
+              if (botName != null) {
+                plugin.getDatabaseManager().markPlayerAsBot(finalUuid, ownerUuid, botName);
+              }
+            }
+            
+            // Update bot name if provided
+            if (meta.has("bot.bot_name")) {
+              String botName = meta.get("bot.bot_name").getAsString();
+              UUID ownerUuid = plugin.getDatabaseManager().getBotOwner(finalUuid);
+              if (botName != null && !botName.isEmpty()) {
+                plugin.getDatabaseManager().markPlayerAsBot(finalUuid, ownerUuid, botName);
+              }
+            }
+            
+            // Don't update QQ for bots (they don't have QQ)
+            // Don't call handleBindingChange for bots
+          } else {
+            // For real players, update QQ binding
+            if (newQq != 0) {
+              plugin.getDatabaseManager().updateBinding(finalUuid, newQq);
+              plugin.handleBindingChange(finalUuid, newQq); // Update guest status if online
             }
           }
-          plugin.handleBindingChange(finalUuid, newQq); // Update guest status if online
+
+          // Update custom meta fields (excluding bot-specific fields that are handled above)
+          for (Map.Entry<String, com.google.gson.JsonElement> entry : meta.entrySet()) {
+            String key = entry.getKey();
+            // Skip bot-specific fields that are handled separately
+            if (key.equals("bot.owner_uuid") || key.equals("bot.bot_name")) {
+              continue;
+            }
+            // Remove meta field if value is null or empty string
+            if (entry.getValue().isJsonNull() || (entry.getValue().isJsonPrimitive() && entry.getValue().getAsString().isEmpty())) {
+                plugin.getDatabaseManager().deleteMeta(finalUuid, key);
+            } else {
+                plugin.getDatabaseManager().setMeta(finalUuid, key, entry.getValue().getAsString());
+            }
+          }
           return true;
         });
         future.get(); // Wait for completion
@@ -771,6 +883,9 @@ public class InternalWebServer {
   private class BotUnbindHandler implements HttpHandler {
     @Override
     public void handle(HttpExchange exchange) throws IOException {
+        if (!authenticate(exchange)) {
+            return;
+        }
       if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
         sendResponse(exchange, 405, "Method not allowed");
         return;
@@ -779,31 +894,21 @@ public class InternalWebServer {
       try (BufferedReader reader = new BufferedReader(
           new InputStreamReader(exchange.getRequestBody(), StandardCharsets.UTF_8))) {
         JsonObject body = gson.fromJson(reader, JsonObject.class);
-        String tokenFromBody = body.has("token") ? body.get("token").getAsString() : null; // Session token from player
         String botIdentifier = body.has("bot_name") ? body.get("bot_name").getAsString() : null;
 
-        if (tokenFromBody == null || botIdentifier == null || botIdentifier.isEmpty()) {
-          sendResponse(exchange, 400, "{\"success\":false, \"error\":\"Missing session token or bot_name\"}");
+        if (botIdentifier == null || botIdentifier.isEmpty()) {
+          sendResponse(exchange, 400, "{\"success\":false, \"error\":\"Missing bot_name\"}");
           return;
         }
-
-        UUID ownerUuid = plugin.validateProfileSessionToken(tokenFromBody);
-        if (ownerUuid == null) {
-          sendResponse(exchange, 401, "{\"error\":\"Invalid or expired session token\"}");
-          return;
-        }
-
-        // Resolve bot_uuid from identifier on the main Bukkit thread
+        
         Future<UUID> futureBotUuid = Bukkit.getScheduler().callSyncMethod(plugin, () -> 
-            UUID.nameUUIDFromBytes(("Bot-" + botIdentifier).getBytes(StandardCharsets.UTF_8)) // Deterministic UUID generation
+            plugin.getDatabaseManager().getBotUuidByName(botIdentifier)
         );
         UUID botUuid = futureBotUuid.get();
 
-        // Ensure the resolved bot is actually a bot and owned by the requesting player
-        UUID actualOwnerUuid = plugin.getDatabaseManager().getBotOwner(botUuid);
-        if (actualOwnerUuid == null || !actualOwnerUuid.equals(ownerUuid)) {
-          sendResponse(exchange, 400, "{\"success\":false, \"error\":\"Bot not found or not owned by you\"}");
-          return;
+        if (botUuid == null) {
+            sendResponse(exchange, 404, "{\"success\":false, \"error\":\"Bot not found\"}");
+            return;
         }
 
         // Delete the bot
@@ -820,117 +925,424 @@ public class InternalWebServer {
         private class QueryHandler implements HttpHandler {
           @Override
           public void handle(HttpExchange exchange) throws IOException {
-            if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
-              sendResponse(exchange, 405, "{\"success\":false, \"error\":\"Method not allowed\"}");
-              return;
-            }
-            if (!authenticate(exchange)) {
-              // Response is sent from within authenticate method
-              return;
-            }
+              if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+                  sendResponse(exchange, 405, "{\"success\":false, \"error\":\"Method not allowed\"}");
+                  return;
+              }
+              if (!authenticate(exchange)) {
+                  return; // Response already sent
+              }
       
-            Map<String, String> params = AuthWithQqPlugin.parseQuery(exchange.getRequestURI().getQuery());
-            String by = params.get("by");
-            String value = params.get("value");
+              Map<String, String> params = AuthWithQqPlugin.parseQuery(exchange.getRequestURI().getQuery());
+              String keyword = params.get("keyword");
+              String by = params.get("by");
+              String target = params.get("target");
       
-            if (by == null || value == null || by.isEmpty() || value.isEmpty()) {
-              sendResponse(exchange, 400, "{\"success\":false, \"error\":\"Missing 'by' or 'value' parameters\"}");
-              return;
-            }
-      
-            try {
-              JsonObject data = new JsonObject();
-              boolean found = false;
-      
-              switch (by) {
-                case "code":
-                  Map<String, String> playerInfo = plugin.findPlayerInfoByCode(value);
-                  if (playerInfo != null) {
-                    data.addProperty("uuid", playerInfo.get("uuid"));
-                    data.addProperty("name", playerInfo.get("name"));
-                    found = true;
-                  }
-                  break;
-      
-                case "qq":
-                  try {
-                    long qq = Long.parseLong(value);
-                    UUID uuidByQq = plugin.getDatabaseManager().findUuidByQq(qq);
-                    if (uuidByQq != null) {
-                      // We need to get the name, which might involve a main thread call
-                      Future<String> futureName = Bukkit.getScheduler().callSyncMethod(plugin,
-                          () -> Bukkit.getOfflinePlayer(uuidByQq).getName());
-                      String name = futureName.get();
-      
-                      data.addProperty("uuid", uuidByQq.toString());
-                      data.addProperty("name", name);
-                      found = true;
-                    }
-                  } catch (NumberFormatException e) {
-                    sendResponse(exchange, 400, "{\"success\":false, \"error\":\"Invalid QQ number format\"}");
-                    return;
-                  }
-                  break;
-      
-                          case "name":
-                            // This can also be a QQ, the DB method handles it
-                            Future<UUID> futureUuid = Bukkit.getScheduler().callSyncMethod(plugin,
-                                () -> plugin.getDatabaseManager().findUuidByNameOrQq(value));
-                            UUID uuidByName = futureUuid.get();
-                            if (uuidByName != null) {
-                              data.addProperty("uuid", uuidByName.toString());
-                              found = true;
-                            }
-                            break;
-                
-                                    case "bots":
-                                      Future<UUID> futureOwnerUuid = Bukkit.getScheduler().callSyncMethod(plugin,
-                                          () -> plugin.getDatabaseManager().findUuidByNameOrQq(value));
-                                      UUID ownerUuid = futureOwnerUuid.get();
-                                      if (ownerUuid != null) {
-                                        String ownerUuidStr = ownerUuid.toString();
-                                        List<Map<String, String>> allPlayersData = plugin.getDatabaseManager().getAllPlayersData();
-                                        JsonArray botsArray = new JsonArray();
-                                        int count = 0;
-                          
-                                        for (Map<String, String> playerData : allPlayersData) {
-                                          // Correct keys based on observed /api/players output
-                                          if ("true".equals(playerData.get("bot.is_bot")) && ownerUuidStr.equals(playerData.get("bot.owner_uuid"))) {
-                                            JsonObject botObj = new JsonObject();
-                                            botObj.addProperty("name", playerData.get("Name"));
-                                            botObj.addProperty("uuid", playerData.get("UUID"));
-                                            botsArray.add(botObj);
-                                            count++;
-                                          }
-                                        }
-                          
-                                        JsonObject response = new JsonObject();
-                                        response.addProperty("success", true);
-                                        response.addProperty("owner_uuid", ownerUuidStr);
-                                        response.addProperty("count", count);
-                                        response.add("bots", botsArray);
-                                        sendResponse(exchange, 200, gson.toJson(response));
-                                        return; // Already sent response for this case
-                                      }
-                                      break;                
-                          default:                  sendResponse(exchange, 400, "{\"success\":false, \"error\":\"Invalid 'by' parameter\"}");
+              if (keyword == null || by == null || target == null) {
+                  sendResponse(exchange, 400, "{\"success\":false, \"error\":\"Missing 'keyword', 'by', or 'target' parameters\"}");
                   return;
               }
       
-              if (found) {
-                JsonObject response = new JsonObject();
-                response.addProperty("success", true);
-                response.add("data", data);
-                sendResponse(exchange, 200, gson.toJson(response));
-              } else {
-                sendResponse(exchange, 404, "{\"success\":false, \"error\":\"Data not found\"}");
+              try {
+                  // Step 1: Resolve Owner UUID
+                  UUID ownerUuid = resolveOwnerUuid(by, keyword);
+      
+                  if (ownerUuid == null) {
+                      sendResponse(exchange, 404, "{\"success\":false, \"error\":\"Owner could not be resolved from keyword\"}");
+                      return;
+                  }
+      
+                  // Step 2: Assemble Data
+                  JsonObject responseData = assembleData(ownerUuid, target);
+      
+                  sendResponse(exchange, 200, gson.toJson(responseData));
+      
+              } catch (Exception e) {
+                  plugin.getLogger().log(Level.SEVERE, "Error during query operation", e);
+                  sendResponse(exchange, 500, "{\"success\":false, \"error\":\"Internal server error: " + e.getMessage() + "\"}");
+              }
+          }
+      
+          private UUID resolveOwnerUuid(String by, String keyword) throws ExecutionException, InterruptedException {
+              Future<UUID> future;
+              switch (by) {
+                  case "uuid":
+                      return UUID.fromString(keyword);
+                  case "name":
+                      future = Bukkit.getScheduler().callSyncMethod(plugin, () -> plugin.getDatabaseManager().getPlayerUuid(keyword));
+                      return future.get();
+                  case "qq":
+                      try {
+                          long qq = Long.parseLong(keyword);
+                          future = Bukkit.getScheduler().callSyncMethod(plugin, () -> plugin.getDatabaseManager().findUuidByQq(qq));
+                          return future.get();
+                      } catch (NumberFormatException e) {
+                          return null;
+                      }
+                  case "bot_name":
+                      future = Bukkit.getScheduler().callSyncMethod(plugin, () -> plugin.getDatabaseManager().getOwnerByBotName(keyword));
+                      return future.get();
+                  case "bot_uuid":
+                      try {
+                          UUID botUuid = UUID.fromString(keyword);
+                          future = Bukkit.getScheduler().callSyncMethod(plugin, () -> plugin.getDatabaseManager().getOwnerByBotUuid(botUuid));
+                          return future.get();
+                      } catch (IllegalArgumentException e) {
+                          return null;
+                      }
+                  default:
+                      return null;
+              }
+          }
+      
+          private JsonObject assembleData(UUID ownerUuid, String target) throws ExecutionException, InterruptedException {
+              JsonObject result = new JsonObject();
+              boolean fetchAll = "all".equals(target);
+      
+              // Player Data
+              if (fetchAll || "player".equals(target)) {
+                Future<JsonObject> playerFuture = Bukkit.getScheduler().callSyncMethod(plugin, () -> {
+                    JsonObject playerData = new JsonObject();
+                    String name = plugin.getDatabaseManager().getNameByUuid(ownerUuid);
+                    long qq = plugin.getDatabaseManager().getQq(ownerUuid);
+                    playerData.addProperty("uuid", ownerUuid.toString());
+                    playerData.addProperty("name", name);
+                    playerData.addProperty("qq", qq);
+                    return playerData;
+                });
+                result.add("player", playerFuture.get());
               }
       
-            } catch (InterruptedException | ExecutionException e) {
-              plugin.getLogger().log(Level.SEVERE, "Error during query operation", e);
-              sendResponse(exchange, 500, "{\"success\":false, \"error\":\"Internal server error\"}");
-            }
+              // Bots Data
+              if (fetchAll || "bots".equals(target)) {
+                Future<JsonArray> botsFuture = Bukkit.getScheduler().callSyncMethod(plugin, () -> {
+                    JsonArray botsArray = new JsonArray();
+                    List<Map<String, String>> bots = plugin.getDatabaseManager().getBotsByOwner(ownerUuid);
+                    for (Map<String, String> bot : bots) {
+                        JsonObject botObj = new JsonObject();
+                        botObj.addProperty("bot_uuid", bot.get("bot_uuid"));
+                        botObj.addProperty("bot_name", bot.get("bot_name"));
+                        botObj.addProperty("created_at", bot.get("created_at"));
+                        botsArray.add(botObj);
+                    }
+                    return botsArray;
+                });
+                result.add("bots", botsFuture.get());
+              }
+      
+              // Meta Data
+              if (fetchAll || "meta".equals(target)) {
+                Future<JsonObject> metaFuture = Bukkit.getScheduler().callSyncMethod(plugin, () -> {
+                    JsonObject metaJson = new JsonObject();
+                    Map<String, String> meta = plugin.getDatabaseManager().getAllMeta(ownerUuid);
+                    meta.forEach(metaJson::addProperty);
+                    return metaJson;
+                });
+                result.add("meta", metaFuture.get());
+              }
+              return result;
           }
-        }
       }
+
+      private class UserBotsHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            Map<String, String> query = AuthWithQqPlugin.parseQuery(exchange.getRequestURI().getQuery());
+            String token = query.get("token");
+            if (token == null) {
+                sendResponse(exchange, 400, "{\"success\":false, \"error\":\"Missing session token\"}");
+                return;
+            }
+
+            UUID ownerUuid = plugin.validateProfileSessionToken(token);
+            if (ownerUuid == null) {
+                sendResponse(exchange, 401, "{\"success\":false, \"error\":\"Invalid or expired session token\"}");
+                return;
+            }
+
+            List<Map<String, String>> bots = plugin.getDatabaseManager().getBotsByOwner(ownerUuid);
+            sendResponse(exchange, 200, gson.toJson(bots));
+        }
+    }
+
+    private class UserBotBindHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+                sendResponse(exchange, 405, "Method not allowed");
+                return;
+            }
+
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(exchange.getRequestBody(), StandardCharsets.UTF_8))) {
+                JsonObject body = gson.fromJson(reader, JsonObject.class);
+                String token = body.has("token") ? body.get("token").getAsString() : null;
+                String botName = body.has("bot_name") ? body.get("bot_name").getAsString() : null;
+
+                if (token == null || botName == null || botName.isEmpty()) {
+                    sendResponse(exchange, 400, "{\"success\":false, \"error\":\"Missing token or bot_name\"}");
+                    return;
+                }
+
+                UUID ownerUuid = plugin.validateProfileSessionToken(token);
+                if (ownerUuid == null) {
+                    sendResponse(exchange, 401, "{\"success\":false, \"error\":\"Invalid or expired session token\"}");
+                    return;
+                }
+
+                int maxBots = plugin.getConfig().getInt("binding.max-bots-per-player", 0);
+                if (maxBots > 0 && plugin.getDatabaseManager().getBotCountForOwner(ownerUuid) >= maxBots) {
+                    sendResponse(exchange, 400, "{\"success\":false, \"error\":\"Bot limit reached\"}");
+                    return;
+                }
+
+                UUID botUuid = UUID.nameUUIDFromBytes(("Bot-" + botName).getBytes(StandardCharsets.UTF_8));
+                
+                plugin.getDatabaseManager().markPlayerAsBot(botUuid, ownerUuid, botName);
+
+                sendResponse(exchange, 200, "{\"success\":true, \"message\":\"Bot bound successfully\"}");
+
+            } catch (Exception e) {
+                plugin.getLogger().log(Level.SEVERE, "Error in UserBotBindHandler", e);
+                sendResponse(exchange, 500, "{\"success\":false, \"error\":\"Internal server error\"}");
+            }
+        }
+    }
+
+    private class UserBotUnbindHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+                sendResponse(exchange, 405, "Method not allowed");
+                return;
+            }
+
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(exchange.getRequestBody(), StandardCharsets.UTF_8))) {
+                JsonObject body = gson.fromJson(reader, JsonObject.class);
+                String token = body.has("token") ? body.get("token").getAsString() : null;
+                String botUuidStr = body.has("bot_uuid") ? body.get("bot_uuid").getAsString() : null;
+
+                if (token == null || botUuidStr == null) {
+                    sendResponse(exchange, 400, "{\"success\":false, \"error\":\"Missing token or bot_uuid\"}");
+                    return;
+                }
+
+                UUID ownerUuid = plugin.validateProfileSessionToken(token);
+                if (ownerUuid == null) {
+                    sendResponse(exchange, 401, "{\"success\":false, \"error\":\"Invalid or expired session token\"}");
+                    return;
+                }
+                
+                UUID botUuid = UUID.fromString(botUuidStr);
+                UUID actualOwner = plugin.getDatabaseManager().getBotOwner(botUuid);
+
+                if (actualOwner == null || !actualOwner.equals(ownerUuid)) {
+                    sendResponse(exchange, 403, "{\"success\":false, \"error\":\"You do not own this bot\"}");
+                    return;
+                }
+
+                plugin.getDatabaseManager().deleteBot(botUuid);
+                sendResponse(exchange, 200, "{\"success\":true, \"message\":\"Bot unbound successfully\"}");
+
+            } catch (Exception e) {
+                plugin.getLogger().log(Level.SEVERE, "Error in UserBotUnbindHandler", e);
+                sendResponse(exchange, 500, "{\"success\":false, \"error\":\"Internal server error\"}");
+            }
+        }
+    }
+
+    // New: Handler for getting all bots
+    private class AllBotsHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if (!authenticate(exchange)) {
+                return;
+            }
+
+            try {
+                List<Map<String, String>> allBotsData = plugin.getDatabaseManager().getAllBotsData();
+                com.google.gson.JsonArray jsonArray = new com.google.gson.JsonArray();
+                for (Map<String, String> botData : allBotsData) {
+                    JsonObject botObject = new JsonObject();
+                    botData.forEach(botObject::addProperty);
+                    jsonArray.add(botObject);
+                }
+                sendResponse(exchange, 200, jsonArray.toString());
+            } catch (Exception e) {
+                plugin.getLogger().log(Level.SEVERE, "Error getting all bots", e);
+                sendResponse(exchange, 500, "{\"error\":\"Internal server error\"}");
+            }
+        }
+    }
+
+    // New: Handler for CSV export
+    private class CsvExportHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if (!authenticate(exchange)) {
+                return;
+            }
+
+            try {
+                List<String> metaKeys = plugin.getDatabaseManager().getAllMetaKeys();
+                List<String> headers = new java.util.ArrayList<>(java.util.Arrays.asList("UUID", "Name", "QQ", "Created"));
+                headers.addAll(metaKeys);
+
+                List<Map<String, String>> allData = plugin.getDatabaseManager().getAllPlayersData();
+
+                StringBuilder csv = new StringBuilder();
+                // Write header
+                csv.append(String.join(",", headers));
+                csv.append("\n");
+
+                // Write data
+                for (Map<String, String> row : allData) {
+                    List<String> line = new java.util.ArrayList<>();
+                    for (String header : headers) {
+                        String value = row.getOrDefault(header, "");
+                        // Escape commas and quotes in CSV
+                        if (value.contains(",") || value.contains("\"") || value.contains("\n")) {
+                            value = "\"" + value.replace("\"", "\"\"") + "\"";
+                        }
+                        line.add(value);
+                    }
+                    csv.append(String.join(",", line));
+                    csv.append("\n");
+                }
+
+                exchange.getResponseHeaders().set("Content-Type", "text/csv; charset=utf-8");
+                exchange.getResponseHeaders().set("Content-Disposition", 
+                    "attachment; filename=\"players_" + 
+                    new java.text.SimpleDateFormat("yyyyMMdd_HHmmss").format(new java.util.Date()) + ".csv\"");
+                
+                byte[] bytes = csv.toString().getBytes(StandardCharsets.UTF_8);
+                exchange.sendResponseHeaders(200, bytes.length);
+                try (OutputStream os = exchange.getResponseBody()) {
+                    os.write(bytes);
+                }
+            } catch (Exception e) {
+                plugin.getLogger().log(Level.SEVERE, "Error exporting CSV", e);
+                sendResponse(exchange, 500, "{\"error\":\"Internal server error\"}");
+            }
+        }
+    }
+
+    // New: Handler for CSV import
+    private class CsvImportHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if (!authenticate(exchange)) {
+                return;
+            }
+            if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+                sendResponse(exchange, 405, "Method not allowed");
+                return;
+            }
+
+            try {
+                // Read CSV content from request body
+                String csvContent;
+                String contentType = exchange.getRequestHeaders().getFirst("Content-Type");
+                
+                if (contentType != null && contentType.startsWith("multipart/form-data")) {
+                    // Handle multipart form data
+                    byte[] bodyBytes = exchange.getRequestBody().readAllBytes();
+                    String body = new String(bodyBytes, StandardCharsets.UTF_8);
+                    
+                    String boundary = null;
+                    for (String header : exchange.getRequestHeaders().get("Content-Type")) {
+                        if (header.contains("boundary=")) {
+                            boundary = "--" + header.substring(header.indexOf("boundary=") + 9);
+                            break;
+                        }
+                    }
+                    
+                    if (boundary == null) {
+                        sendResponse(exchange, 400, "{\"success\":false, \"error\":\"Invalid multipart data\"}");
+                        return;
+                    }
+                    
+                    csvContent = extractCsvFromMultipart(body, boundary);
+                    if (csvContent == null || csvContent.isEmpty()) {
+                        sendResponse(exchange, 400, "{\"success\":false, \"error\":\"No CSV file found in upload\"}");
+                        return;
+                    }
+                } else {
+                    // Handle plain text CSV
+                    try (BufferedReader reader = new BufferedReader(
+                            new InputStreamReader(exchange.getRequestBody(), StandardCharsets.UTF_8))) {
+                        StringBuilder sb = new StringBuilder();
+                        String line;
+                        while ((line = reader.readLine()) != null) {
+                            sb.append(line).append("\n");
+                        }
+                        csvContent = sb.toString();
+                    }
+                }
+
+                if (csvContent == null || csvContent.trim().isEmpty()) {
+                    sendResponse(exchange, 400, "{\"success\":false, \"error\":\"Empty CSV file\"}");
+                    return;
+                }
+
+                // Parse and import CSV using existing CsvManager
+                java.io.File tempFile = java.io.File.createTempFile("csv_import_", ".csv");
+                try {
+                    try (java.io.FileWriter writer = new java.io.FileWriter(tempFile, StandardCharsets.UTF_8)) {
+                        writer.write(csvContent);
+                    }
+                    
+                    // Use existing CsvManager to import
+                    plugin.getCsvManager().importCsv(tempFile);
+                    
+                    // Count imported records
+                    int importedCount = csvContent.split("\n").length - 1; // Subtract header
+                    if (importedCount < 0) importedCount = 0;
+                    
+                    JsonObject result = new JsonObject();
+                    result.addProperty("success", true);
+                    result.addProperty("imported", importedCount);
+                    result.addProperty("message", String.format("导入完成: 成功导入 %d 条记录", importedCount));
+                    sendResponse(exchange, 200, gson.toJson(result));
+                } finally {
+                    tempFile.delete();
+                }
+
+            } catch (Exception e) {
+                plugin.getLogger().log(Level.SEVERE, "Error importing CSV", e);
+                sendResponse(exchange, 500, "{\"success\":false, \"error\":\"Internal server error: " + e.getMessage() + "\"}");
+            }
+        }
+
+        private String extractCsvFromMultipart(String body, String boundary) {
+            int startIdx = body.indexOf(boundary);
+            if (startIdx == -1) {
+                return null;
+            }
+            
+            int contentStart = body.indexOf("\r\n\r\n", startIdx);
+            if (contentStart == -1) {
+                contentStart = body.indexOf("\n\n", startIdx);
+                if (contentStart == -1) {
+                    return null;
+                }
+                contentStart += 2;
+            } else {
+                contentStart += 4;
+            }
+
+            int endIdx = body.indexOf(boundary, contentStart);
+            if (endIdx == -1) {
+                endIdx = body.length();
+            }
+
+            String content = body.substring(contentStart, endIdx);
+            content = content.replaceAll("--$", "").trim();
+            // Remove trailing \r\n
+            while (content.endsWith("\r\n") || content.endsWith("\n")) {
+                content = content.substring(0, content.length() - (content.endsWith("\r\n") ? 2 : 1));
+            }
+            return content;
+        }
+    }
+}
       
