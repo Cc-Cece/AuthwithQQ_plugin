@@ -2,7 +2,9 @@ name: Dev Build and Release
 
 on:
   push:
-    branches: [ main ]
+    branches: 
+      - main
+      - 'feature/**'
     paths-ignore:
       - '**.md'
       - '.gitignore'
@@ -28,6 +30,15 @@ jobs:
       - name: Grant execute permission
         run: chmod +x gradlew
 
+      - name: Add Build Type Annotation
+        run: |
+          if [ "${{ github.ref }}" != "refs/heads/main" ]; then
+            echo "::notice title=Feature Branch Build::Building from feature branch: ${{ github.ref_name }}"
+            echo "::warning::This is a feature branch build for testing purposes"
+          else
+            echo "::notice title=Main Branch Build::Building from main branch"
+          fi
+
       # 显式执行 shadowJar 确保生成全量包
       # 使用 --continue 忽略 Checkstyle 等非致命错误
       - name: Build with ShadowJar
@@ -52,33 +63,54 @@ jobs:
           # 3. 设置输出变量
           echo "PATH=$RELEASE_JAR" >> "$GITHUB_OUTPUT"
           echo "NAME=$(basename $RELEASE_JAR)" >> "$GITHUB_OUTPUT"
+          echo "BRANCH_TYPE=${{ github.ref == 'refs/heads/main' && 'main' || 'feature' }}" >> "$GITHUB_OUTPUT"
+          echo "BRANCH_NAME=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
           echo "Found Asset: $RELEASE_JAR"
 
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: dev-build-${{ github.run_number }}
+          name: ${{ format('{0}-{1}-build-{2}', steps.find_asset.outputs.BRANCH_TYPE, steps.find_asset.outputs.BRANCH_NAME, github.run_number) }}
           path: ${{ steps.find_asset.outputs.PATH }}
-          retention-days: 14
+          retention-days: ${{ steps.find_asset.outputs.BRANCH_TYPE == 'main' && 30 || 14 }}
 
-      - name: Update Dev Release
+      - name: Log Artifact Info
+        run: |
+          echo "::notice title=Artifact Uploaded::Artifact name: ${{ format('{0}-{1}-build-{2}', steps.find_asset.outputs.BRANCH_TYPE, steps.find_asset.outputs.BRANCH_NAME, github.run_number) }}"
+          echo "::notice::Retention: ${{ steps.find_asset.outputs.BRANCH_TYPE == 'main' && 30 || 14 }} days"
+
+      - name: Update Release
         uses: softprops/action-gh-release@v2
         with:
           files: ${{ steps.find_asset.outputs.PATH }}
-          tag_name: dev
-          name: "Latest Dev Build (#${{ github.run_number }})"
+          tag_name: ${{ github.ref == 'refs/heads/main' && 'dev' || format('feature/{0}', github.ref_name) }}
+          name: ${{ github.ref == 'refs/heads/main' && format('Latest Dev Build (#{0})', github.run_number) || format('Feature Build: {0} (#{1})', github.ref_name, github.run_number) }}
           body: |
-            ## 🛠 构建详情
+            ${{ github.ref != 'refs/heads/main' && format('> [!WARNING]\n> 这是 Feature 分支 `{0}` 的测试构建，仅供测试使用。\n\n', github.ref_name) || '' }}
+            ## 🛠 最新构建详情
+            - **分支**: `${{ github.ref_name }}`
+            - **构建类型**: ${{ github.ref == 'refs/heads/main' && '正式构建' || 'Feature 测试构建' }}
             - **项目名称**: `${{ steps.find_asset.outputs.NAME }}`
             - **提交信息**: `${{ github.event.head_commit.message }}`
             - **提交哈希**: `${{ github.sha }}`
             - **构建编号**: `${{ github.run_number }}`
             
-            > [!TIP]
-            > 如果构建通过但有黄色警告，说明代码规范（Checkstyle/SpotBugs）未完全达标。
-          prerelease: true
-          make_latest: false
-          # 强制覆盖旧的 dev 标签关联的 Release
+            ${{ github.ref == 'refs/heads/main' && '> [!TIP]\n> 如果构建通过但有黄色警告，说明代码规范（Checkstyle/SpotBugs）未完全达标。' || '> [!NOTE]\n> 此构建来自 Feature 分支，可能包含未完成的特性，请谨慎使用。' }}
+            
+            ## 📦 历史构建
+            > [!INFO]
+            > 历史构建保存在 GitHub Actions Artifacts 中。
+            > 
+            > **如何下载历史构建：**
+            > 1. 访问 [Actions 页面](https://github.com/${{ github.repository }}/actions)
+            > 2. 找到对应的构建运行记录
+            > 3. 在 Artifacts 部分下载构建产物
+            > 
+            > **Artifact 命名规则：**
+            > - Main 分支: `main-dev-build-{构建号}`
+            > - Feature 分支: `feature-{分支名}-build-{构建号}`
+          prerelease: ${{ github.ref != 'refs/heads/main' }}
+          make_latest: ${{ github.ref == 'refs/heads/main' }}
           overwrite: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
