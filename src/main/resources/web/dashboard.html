@@ -30,7 +30,14 @@
         <div class="card">
             <div class="card-header">
                 <h2>TPS (Ticks Per Second)</h2>
-                <span class="card-badge" id="tps-badge">--</span>
+                <div style="display: flex; align-items: center; gap: 12px;">
+                    <select id="tpsTimeRange" style="padding: 4px 8px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 12px;">
+                        <option value="50">最近50个点</option>
+                        <option value="100">最近100个点</option>
+                        <option value="200">最近200个点</option>
+                    </select>
+                    <span class="card-badge" id="tps-badge">--</span>
+                </div>
             </div>
             <p id="tps-value" class="metric-value">加载中...</p>
             <div class="chart-container">
@@ -42,12 +49,17 @@
             <div class="card-header">
                 <h2>内存占用</h2>
             </div>
-            <div class="progress-bar-container">
-                <div class="progress-bar" id="memory-progress">
-                    <div class="progress-label" id="memory-label">0%</div>
+            <div style="margin-top: 16px;">
+                <div class="progress-bar-container">
+                    <div class="progress-bar" id="memory-progress">
+                        <div class="progress-label" id="memory-label">0%</div>
+                    </div>
                 </div>
+                <p id="memory-progress-value" class="metric-value" style="font-size: 0.875rem; margin-top: 8px;">加载中...</p>
             </div>
-            <p id="memory-value" class="metric-value">加载中...</p>
+            <div class="chart-container" style="height: 200px;">
+                <canvas id="memoryChart"></canvas>
+            </div>
         </div>
         
         <div class="card">
@@ -67,26 +79,88 @@
             </div>
         </div>
         
-        <div class="card" id="bots-card">
+        <div class="card">
             <div class="card-header">
-                <h2>我的假人 (Bots)</h2>
+                <h2>服务器信息</h2>
             </div>
-            <div id="bots-login-prompt" class="empty-state" style="display: none;">
-                <div class="empty-state-icon">🤖</div>
-                <p>请先登录以管理假人</p>
-                <button class="btn-secondary" onclick="location.href='profile.html'">前往登录</button>
+            <div class="info-grid">
+                <div class="info-item">
+                    <span class="info-label">运行时间</span>
+                    <span class="info-value" id="uptime-value">--</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">服务器版本</span>
+                    <span class="info-value" id="server-version">--</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Bukkit版本</span>
+                    <span class="info-value" id="bukkit-version">--</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Minecraft版本</span>
+                    <span class="info-value" id="minecraft-version">--</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">世界数量</span>
+                    <span class="info-value" id="world-count">--</span>
+                </div>
             </div>
-            <div id="bots-content" style="display: none;">
-                <ul id="bots-list" class="bots-list">
-                    <!-- Bots will be listed here -->
-                </ul>
-                <form id="add-bot-form" class="bot-form">
-                    <div class="form-group" style="margin-bottom: 0;">
-                        <input type="text" id="bot-name-input" placeholder="输入假人ID" required>
-                        <button type="submit" class="btn">添加假人</button>
-                    </div>
-                </form>
+        </div>
+        
+        <div class="card">
+            <div class="card-header">
+                <h2>实体统计</h2>
             </div>
+            <div class="info-grid">
+                <div class="info-item">
+                    <span class="info-label">总实体数</span>
+                    <span class="info-value" id="total-entities">--</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">玩家</span>
+                    <span class="info-value" id="player-entities">--</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">生物</span>
+                    <span class="info-value" id="living-entities">--</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">掉落物</span>
+                    <span class="info-value" id="item-entities">--</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">其他</span>
+                    <span class="info-value" id="other-entities">--</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-header">
+                <h2>今日在线统计</h2>
+            </div>
+            <div class="info-grid" style="margin-bottom: 12px;">
+                <div class="info-item">
+                    <span class="info-label">今日唯一玩家</span>
+                    <span class="info-value" id="today-unique-players">--</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">今日总在线时长</span>
+                    <span class="info-value" id="today-total-online-time">--</span>
+                </div>
+            </div>
+            <ul id="today-player-times-list" class="player-times-list">
+                <li class="player-time-item empty">加载中...</li>
+            </ul>
+        </div>
+        
+        <div class="card">
+            <div class="card-header">
+                <h2>最近玩家活动</h2>
+            </div>
+            <ul id="recent-activities-list" class="activities-list">
+                <li class="activity-item empty">加载中...</li>
+            </ul>
         </div>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>

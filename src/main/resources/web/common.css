@@ -25,7 +25,6 @@ body {
     padding: 0;
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;
-    display: flex;
     flex-direction: column;
     min-height: 100vh;
 }
@@ -309,4 +308,10 @@ input.success {
 *:focus-visible {
     outline: 2px solid var(--primary-color);
     outline-offset: 2px;
+}
+
+.feature-card {
+    text-decoration: none; 
+    color: inherit;        
+    display: block;       
 }

@@ -9,7 +9,7 @@ plugins {
 }
 
 group = "com.cccece"
-version = "1.10-SNAPSHOT"
+version = "1.11-SNAPSHOT"
 
 java {
     sourceCompatibility = JavaVersion.VERSION_21
@@ -44,6 +44,7 @@ dependencies {
     compileOnly 'com.github.spotbugs:spotbugs-annotations:4.9.8'
     implementation 'io.papermc:paperlib:1.0.8'
     compileOnly 'org.xerial:sqlite-jdbc:3.45.1.0'
+    implementation 'org.mindrot:jbcrypt:0.4'
     spotbugsPlugins 'com.h3xstream.findsecbugs:findsecbugs-plugin:1.14.0'
     testCompileOnly 'com.github.spotbugs:spotbugs-annotations:4.9.8'
     testImplementation 'io.papermc.paper:paper-api:1.21.1-R0.1-SNAPSHOT'

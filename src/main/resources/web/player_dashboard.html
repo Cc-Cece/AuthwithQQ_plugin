@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>玩家控制台</title>
+    <link rel="stylesheet" href="common.css">
+    <link rel="stylesheet" href="components.css">
+    <style>
+        .header {
+            background: var(--primary-color);
+            color: white;
+            padding: 20px;
+            margin-bottom: 24px;
+        }
+        .header-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .header h1 {
+            color: white;
+            margin: 0;
+        }
+        .header-actions {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+        .logout-btn {
+            padding: 8px 16px;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: var(--radius);
+            cursor: pointer;
+            text-decoration: none;
+            transition: background 0.2s;
+        }
+        .logout-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+        .dashboard-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px 40px;
+        }
+        .dashboard-layout {
+            display: flex;
+            gap: 24px;
+            flex-wrap: wrap;
+        }
+        .dashboard-layout > * {
+            flex: 1;
+            min-width: 300px;
+        }
+        @media (min-width: 768px) {
+            .dashboard-layout {
+                flex-wrap: nowrap;
+            }
+        }
+        .info-card {
+            background: var(--surface-color);
+            border-radius: var(--radius);
+            padding: 24px;
+            box-shadow: var(--shadow-1);
+        }
+        .info-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .edit-profile-btn {
+            padding: 8px 16px;
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: var(--radius);
+            cursor: pointer;
+            text-decoration: none;
+            font-size: 14px;
+            transition: background 0.2s;
+            display: inline-block;
+        }
+        .edit-profile-btn:hover {
+            background: var(--primary-hover);
+        }
+        .info-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 12px 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .info-item:last-child {
+            border-bottom: none;
+        }
+        .info-label {
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+        .info-value {
+            color: var(--text-primary);
+        }
+        .bots-section {
+            background: var(--surface-color);
+            border-radius: var(--radius);
+            padding: 24px;
+            box-shadow: var(--shadow-1);
+        }
+        .bots-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .bots-list {
+            list-style: none;
+            padding: 0;
+            margin: 0 0 20px 0;
+        }
+        .bot-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px;
+            background: var(--background-color);
+            border-radius: var(--radius);
+            margin-bottom: 8px;
+        }
+        .bot-name {
+            font-weight: 500;
+        }
+        .bot-actions {
+            display: flex;
+            gap: 8px;
+        }
+        .btn-small {
+            padding: 6px 12px;
+            font-size: 14px;
+        }
+        .add-bot-form {
+            display: flex;
+            gap: 12px;
+        }
+        .add-bot-form input {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+        }
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-secondary);
+        }
+        .bot-limit-info {
+            margin-top: 12px;
+            padding: 12px;
+            background: var(--background-color);
+            border-radius: var(--radius);
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+        .bot-limit-info.limit-reached {
+            background: #fce8e6;
+            color: var(--error-color);
+        }
+        .bot-limit-info.limit-warning {
+            background: #fef7e0;
+            color: #f9ab00;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-content">
+            <h1>玩家控制台</h1>
+            <div class="header-actions">
+                <span id="playerName">加载中...</span>
+                <button class="logout-btn" id="logoutBtn">登出</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="dashboard-container">
+        <div class="dashboard-layout">
+            <div class="info-card">
+                <div class="info-card-header">
+                    <h2>个人信息</h2>
+                    <a href="profile.html" class="edit-profile-btn" id="editProfileBtn">编辑资料</a>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">玩家名</span>
+                    <span class="info-value" id="infoName">--</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">UUID</span>
+                    <span class="info-value" id="infoUuid">--</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">QQ号</span>
+                    <span class="info-value" id="infoQq">--</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">假人数量</span>
+                    <span class="info-value" id="infoBotCount">--</span>
+                </div>
+                <div class="info-item" id="botLimitItem" style="display: none;">
+                    <span class="info-label">假人限额</span>
+                    <span class="info-value" id="infoBotLimit">--</span>
+                </div>
+            </div>
+
+            <div class="bots-section">
+            <div class="bots-header">
+                <h2>我的假人</h2>
+            </div>
+            <div class="bot-limit-info" id="botLimitInfo" style="display: none;"></div>
+            <ul class="bots-list" id="botsList">
+                <li class="empty-state">加载中...</li>
+            </ul>
+            <form class="add-bot-form" id="addBotForm">
+                <input type="text" id="botNameInput" placeholder="输入假人名称" required>
+                <button type="submit" class="btn btn-small">添加假人</button>
+            </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="components.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const { Toast, Loading } = window.MaterialComponents;
+            const sessionToken = localStorage.getItem('session_token');
+            const playerNameEl = document.getElementById('playerName');
+            const logoutBtn = document.getElementById('logoutBtn');
+            const botsList = document.getElementById('botsList');
+            const addBotForm = document.getElementById('addBotForm');
+            const botNameInput = document.getElementById('botNameInput');
+            const editProfileBtn = document.getElementById('editProfileBtn');
+
+            // Check authentication
+            if (!sessionToken) {
+                window.location.href = 'login.html';
+                return;
+            }
+
+            // Load player info
+            async function loadPlayerInfo() {
+                try {
+                    const response = await fetch('/api/auth/verify', {
+                        headers: { 'X-Session-Token': sessionToken }
+                    });
+                    const data = await response.json();
+                    if (!data.valid) {
+                        throw new Error('Session invalid');
+                    }
+                    playerNameEl.textContent = data.name;
+                    document.getElementById('infoName').textContent = data.name;
+                    document.getElementById('infoUuid').textContent = data.uuid;
+                } catch (error) {
+                    Toast.error('获取玩家信息失败');
+                    window.location.href = 'login.html';
+                }
+            }
+
+            // Load profile
+            async function loadProfile() {
+                const loading = Loading.show('加载个人信息...');
+                try {
+                    const response = await fetch('/api/profile', {
+                        headers: { 'X-Session-Token': sessionToken }
+                    });
+                    if (!response.ok) {
+                        throw new Error('Failed to load profile');
+                    }
+                    const profile = await response.json();
+                    document.getElementById('infoQq').textContent = profile.qq || '未绑定';
+                } catch (error) {
+                    console.error('Error loading profile:', error);
+                    Toast.error('加载个人信息失败');
+                } finally {
+                    Loading.hide(loading);
+                }
+            }
+
+            // Load bots
+            async function loadBots() {
+                try {
+                    const response = await fetch('/api/user/bots', {
+                        headers: { 'X-Session-Token': sessionToken }
+                    });
+                    if (!response.ok) {
+                        throw new Error('Failed to load bots');
+                    }
+                    const data = await response.json();
+                    
+                    // Handle both old format (array) and new format (object with metadata)
+                    let bots, currentCount, maxLimit, limitEnabled;
+                    if (Array.isArray(data)) {
+                        bots = data;
+                        currentCount = bots.length;
+                        maxLimit = 0;
+                        limitEnabled = false;
+                    } else {
+                        bots = data.bots || [];
+                        currentCount = data.current_count || bots.length;
+                        maxLimit = data.max_limit || 0;
+                        limitEnabled = data.limit_enabled || false;
+                    }
+                    
+                    document.getElementById('infoBotCount').textContent = currentCount;
+                    
+                    // Display bot limit info
+                    const botLimitItem = document.getElementById('botLimitItem');
+                    const botLimitInfo = document.getElementById('botLimitInfo');
+                    const infoBotLimit = document.getElementById('infoBotLimit');
+                    
+                    if (maxLimit === 0) {
+                        // 0 means bot adding is disabled
+                        botLimitItem.style.display = 'flex';
+                        infoBotLimit.textContent = '已禁用';
+                        botLimitInfo.style.display = 'block';
+                        botLimitInfo.className = 'bot-limit-info limit-reached';
+                        botLimitInfo.textContent = '⚠ 假人添加功能已禁用';
+                    } else if (maxLimit < 0) {
+                        // Negative number means unlimited
+                        botLimitItem.style.display = 'flex';
+                        infoBotLimit.textContent = '无限制';
+                        botLimitInfo.style.display = 'block';
+                        botLimitInfo.className = 'bot-limit-info';
+                        botLimitInfo.textContent = `假人数量: ${currentCount} (无限制)`;
+                    } else if (limitEnabled && maxLimit > 0) {
+                        // Positive number means limit check
+                        botLimitItem.style.display = 'flex';
+                        infoBotLimit.textContent = `${currentCount} / ${maxLimit}`;
+                        
+                        // Show limit info in bots section
+                        botLimitInfo.style.display = 'block';
+                        if (currentCount >= maxLimit) {
+                            botLimitInfo.className = 'bot-limit-info limit-reached';
+                            botLimitInfo.textContent = `⚠ 已达到假人限额 (${currentCount}/${maxLimit})，无法添加更多假人`;
+                        } else if (currentCount >= maxLimit * 0.8) {
+                            botLimitInfo.className = 'bot-limit-info limit-warning';
+                            botLimitInfo.textContent = `⚠ 假人数量接近限额 (${currentCount}/${maxLimit})`;
+                        } else {
+                            botLimitInfo.className = 'bot-limit-info';
+                            botLimitInfo.textContent = `假人数量: ${currentCount}/${maxLimit}`;
+                        }
+                    } else {
+                        botLimitItem.style.display = 'none';
+                        botLimitInfo.style.display = 'none';
+                    }
+                    
+                    if (bots.length === 0) {
+                        botsList.innerHTML = '<li class="empty-state">暂无假人</li>';
+                    } else {
+                        botsList.innerHTML = bots.map(bot => `
+                            <li class="bot-item">
+                                <span class="bot-name">${bot.bot_name}</span>
+                                <div class="bot-actions">
+                                    <button class="btn btn-small btn-secondary" onclick="deleteBot('${bot.bot_uuid}', '${bot.bot_name}')">删除</button>
+                                </div>
+                            </li>
+                        `).join('');
+                    }
+                } catch (error) {
+                    console.error('Error loading bots:', error);
+                    botsList.innerHTML = '<li class="empty-state">加载失败</li>';
+                    Toast.error('加载假人列表失败');
+                }
+            }
+
+            // Add bot
+            addBotForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const botName = botNameInput.value.trim();
+                if (!botName) {
+                    Toast.error('请输入假人名称');
+                    return;
+                }
+
+                const loading = Loading.show('添加假人中...');
+                try {
+                    const response = await fetch('/api/user/bot/bind', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-Session-Token': sessionToken
+                        },
+                        body: JSON.stringify({ bot_name: botName })
+                    });
+                    const data = await response.json();
+                    if (data.success) {
+                        Toast.success('假人添加成功');
+                        botNameInput.value = '';
+                        loadBots();
+                        
+                        // Update limit info if provided
+                        if (data.current_count !== undefined && data.max_limit !== undefined) {
+                            const currentCount = data.current_count;
+                            const maxLimit = data.max_limit;
+                            document.getElementById('infoBotCount').textContent = currentCount;
+                            const infoBotLimit = document.getElementById('infoBotLimit');
+                            if (infoBotLimit) {
+                                if (maxLimit === 0) {
+                                    infoBotLimit.textContent = '已禁用';
+                                } else if (maxLimit < 0) {
+                                    infoBotLimit.textContent = '无限制';
+                                } else {
+                                    infoBotLimit.textContent = `${currentCount} / ${maxLimit}`;
+                                }
+                            }
+                        }
+                    } else {
+                        let errorMsg = data.error || '添加失败';
+                        if (data.current_count !== undefined && data.max_limit !== undefined) {
+                            const maxLimit = data.max_limit;
+                            if (maxLimit === 0) {
+                                errorMsg += ' (假人添加功能已禁用)';
+                            } else if (maxLimit < 0) {
+                                // Unlimited case shouldn't reach here, but handle it anyway
+                                errorMsg += ' (无限制)';
+                            } else {
+                                errorMsg += ` (当前: ${data.current_count}/${maxLimit})`;
+                            }
+                        }
+                        Toast.error(errorMsg);
+                    }
+                } catch (error) {
+                    console.error('Error adding bot:', error);
+                    Toast.error('网络错误');
+                } finally {
+                    Loading.hide(loading);
+                }
+            });
+
+            // Delete bot
+            window.deleteBot = async function(botUuid, botName) {
+                if (!confirm(`确定要删除假人 "${botName}" 吗？`)) {
+                    return;
+                }
+
+                const loading = Loading.show('删除假人中...');
+                try {
+                    const response = await fetch('/api/user/bot/unbind', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-Session-Token': sessionToken
+                        },
+                        body: JSON.stringify({ bot_uuid: botUuid })
+                    });
+                    const data = await response.json();
+                    if (data.success) {
+                        Toast.success('假人删除成功');
+                        loadBots();
+                    } else {
+                        Toast.error(data.error || '删除失败');
+                    }
+                } catch (error) {
+                    console.error('Error deleting bot:', error);
+                    Toast.error('网络错误');
+                } finally {
+                    Loading.hide(loading);
+                }
+            };
+
+            // Logout
+            logoutBtn.addEventListener('click', async () => {
+                try {
+                    await fetch('/api/auth/logout', {
+                        method: 'POST',
+                        headers: { 'X-Session-Token': sessionToken }
+                    });
+                } catch (error) {
+                    console.error('Logout error:', error);
+                }
+                localStorage.removeItem('session_token');
+                localStorage.removeItem('player_uuid');
+                localStorage.removeItem('player_name');
+                window.location.href = 'login.html';
+            });
+
+            // Setup edit profile button
+            editProfileBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                // Profile page will handle X-Session-Token from localStorage
+                window.location.href = 'profile.html';
+            });
+
+            // Initialize
+            loadPlayerInfo();
+            loadProfile();
+            loadBots();
+        });
+    </script>
+</body>
+</html>

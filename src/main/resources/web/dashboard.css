@@ -1,5 +1,33 @@
 /* dashboard.css - Specific styles for dashboard.html */
 
+.info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 16px;
+    margin-top: 16px;
+}
+
+.info-item {
+    display: flex;
+    flex-direction: column;
+    padding: 12px;
+    background: var(--background-color);
+    border-radius: var(--radius);
+}
+
+.info-label {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+    font-weight: 500;
+}
+
+.info-value {
+    font-size: 18px;
+    color: var(--text-primary);
+    font-weight: 600;
+}
+
 .header-content {
     display: flex;
     justify-content: space-between;
@@ -268,6 +296,102 @@
 .bot-form button {
     flex-shrink: 0;
     min-width: 100px;
+}
+
+.activities-list {
+    list-style: none;
+    padding: 0;
+    margin: 16px 0 0 0;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.player-times-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    max-height: 300px;
+    overflow-y: auto;
+    border-top: 1px solid var(--border-color);
+}
+
+.player-time-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px;
+    border-bottom: 1px solid var(--border-color);
+    font-size: 0.875rem;
+}
+
+.player-time-item:last-child {
+    border-bottom: none;
+}
+
+.player-time-item.empty {
+    justify-content: center;
+    color: var(--text-secondary);
+    font-style: italic;
+    padding: 16px;
+}
+
+.player-time-name {
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.player-time-duration {
+    color: var(--text-secondary);
+    font-size: 0.8125rem;
+}
+
+.activity-item {
+    display: flex;
+    align-items: center;
+    padding: 12px;
+    margin-bottom: 8px;
+    background-color: var(--background-color);
+    border-radius: var(--radius);
+    border-left: 3px solid var(--primary-color);
+    font-size: 0.875rem;
+}
+
+.activity-item.join {
+    border-left-color: var(--success-color);
+}
+
+.activity-item.quit {
+    border-left-color: var(--text-secondary);
+}
+
+.activity-item.empty {
+    justify-content: center;
+    color: var(--text-secondary);
+    font-style: italic;
+    background: none;
+    border: none;
+}
+
+.activity-icon {
+    margin-right: 12px;
+    font-size: 1.2rem;
+}
+
+.activity-content {
+    flex: 1;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.activity-player {
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.activity-time {
+    color: var(--text-secondary);
+    font-size: 0.75rem;
 }
 
 #refreshIcon {

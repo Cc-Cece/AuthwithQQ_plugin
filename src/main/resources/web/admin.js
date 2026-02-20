@@ -15,7 +15,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const bindBtn = document.getElementById('bindBtn');
     const bindBtnText = document.getElementById('bindBtnText');
     const tokenBtn = document.getElementById('tokenBtn');
-    
+
     // API Token 管理
     function getApiToken() {
         const urlParams = new URLSearchParams(window.location.search);
@@ -25,7 +25,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         return token;
     }
-    
+
     function setApiToken(token) {
         localStorage.setItem('apiToken', token);
     }
@@ -79,7 +79,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     
     function checkTokenAndInit() {
-        const apiToken = getApiToken();
+    const apiToken = getApiToken();
         if (!apiToken) {
             showTokenModal();
             return false;
@@ -91,18 +91,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     // 初始化检查 Token
     if (!checkTokenAndInit()) {
-        return;
-    }
+            return;
+        }
     
     const apiToken = getApiToken();
-    
+
     // 查询功能
     queryForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const keyword = queryKeywordInput.value.trim();
         const by = queryBySelect.value;
         const target = queryTargetSelect.value;
-        
+
         if (!keyword) {
             Toast.error('关键词不能为空');
             return;
@@ -110,12 +110,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         await performQuery(keyword, by, target);
     });
-    
+
     async function performQuery(keyword, by, target) {
         Loading.button(queryBtn, true);
         queryBtnText.textContent = '查询中...';
         queryResultDiv.innerHTML = '';
-        
+
         // 显示骨架屏
         const skeleton = document.createElement('div');
         skeleton.className = 'card';
@@ -130,7 +130,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const response = await fetch(
                 `/api/query?keyword=${encodeURIComponent(keyword)}&by=${by}&target=${target}`,
                 {
-                    headers: { 'X-API-Token': apiToken }
+            headers: { 'X-API-Token': apiToken }
                 }
             );
             
@@ -160,7 +160,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             queryBtnText.textContent = '查询';
         }
     }
-    
+
     function renderQueryResult(data, target) {
         if (target === 'all' || target === 'player') {
             if (data.player) {
@@ -188,13 +188,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             queryResultDiv.appendChild(emptyCard);
         }
     }
-    
+
     function renderPlayer(player) {
         const playerCard = document.createElement('div');
         playerCard.className = 'card result-card';
         playerCard.innerHTML = `
             <div class="result-header">
-                <h3>玩家信息</h3>
+            <h3>玩家信息</h3>
                 <div class="result-actions">
                     <button class="btn-secondary btn-edit" data-uuid="${player.uuid}">编辑</button>
                     <button class="btn-unbind" data-uuid="${player.uuid}">解绑</button>
@@ -216,7 +216,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             </table>
         `;
         queryResultDiv.appendChild(playerCard);
-        
+
         // 绑定事件
         playerCard.querySelector('.btn-unbind').addEventListener('click', () => {
             unbindPlayer(player.uuid, player.name);
@@ -226,7 +226,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             window.location.href = `admin_edit_player.html?uuid=${player.uuid}&token=${apiToken}`;
         });
     }
-    
+
     function renderBots(bots) {
         const botsCard = document.createElement('div');
         botsCard.className = 'card result-card';
@@ -261,7 +261,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         botsCard.innerHTML = botsHtml;
         queryResultDiv.appendChild(botsCard);
-        
+
         // 绑定删除事件
         botsCard.querySelectorAll('.btn-unbind').forEach(button => {
             button.addEventListener('click', (e) => {
@@ -270,7 +270,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
         });
     }
-    
+
     function renderMeta(meta) {
         const metaCard = document.createElement('div');
         metaCard.className = 'card result-card';
@@ -319,12 +319,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         try {
             const response = await fetch('/api/unbind', {
-                method: 'POST',
+            method: 'POST',
                 headers: { 
                     'Content-Type': 'application/json', 
                     'X-API-Token': apiToken 
                 },
-                body: JSON.stringify({ uuid: uuid })
+            body: JSON.stringify({ uuid: uuid })
             });
             
             const data = await response.json();
@@ -347,7 +347,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             Toast.error(`解绑操作失败: ${error.message}`);
         }
     }
-    
+
     // 解绑假人
     async function unbindBot(botName) {
         const confirmed = await new Promise(resolve => {
@@ -359,15 +359,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
         
         if (!confirmed) return;
-        
+
         try {
             const response = await fetch('/api/bot/unbind', {
-                method: 'POST',
+            method: 'POST',
                 headers: { 
                     'Content-Type': 'application/json', 
                     'X-API-Token': apiToken 
                 },
-                body: JSON.stringify({ bot_name: botName })
+            body: JSON.stringify({ bot_name: botName })
             });
             
             const data = await response.json();
@@ -389,23 +389,23 @@ document.addEventListener('DOMContentLoaded', async () => {
             Toast.error(`删除假人操作失败: ${error.message}`);
         }
     }
-    
+
     // 手动绑定
     bindForm.addEventListener('submit', async (event) => {
-        event.preventDefault();
-        const playerIdentifier = playerIdentifierInput.value.trim();
-        const qqNumber = qqNumberInput.value.trim();
-        
-        if (!playerIdentifier || !qqNumber) {
+            event.preventDefault();
+            const playerIdentifier = playerIdentifierInput.value.trim();
+            const qqNumber = qqNumberInput.value.trim();
+
+            if (!playerIdentifier || !qqNumber) {
             Toast.error('玩家标识符和QQ号码不能为空');
             return;
         }
         
         if (!Utils.validateQQ(qqNumber)) {
             Toast.error('QQ号格式不正确');
-            return;
-        }
-        
+                return;
+            }
+
         Loading.button(bindBtn, true);
         bindBtnText.textContent = '提交中...';
         
@@ -426,13 +426,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             
             if (response.ok && data.success) {
                 Toast.success(data.message || '绑定成功');
-                playerIdentifierInput.value = '';
-                qqNumberInput.value = '';
-            } else {
-                throw new Error(data.error || '未知错误');
-            }
+                    playerIdentifierInput.value = '';
+                    qqNumberInput.value = '';
+                } else {
+                    throw new Error(data.error || '未知错误');
+                }
         } catch (error) {
-            console.error('Error in admin bind:', error);
+                console.error('Error in admin bind:', error);
             Toast.error(`操作失败: ${error.message}`);
         } finally {
             Loading.button(bindBtn, false);
@@ -861,7 +861,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         exportCsvBtn.addEventListener('click', async () => {
         Loading.button(exportCsvBtn, true);
         try {
-            const response = await fetch('/api/csv/export', {
+            const csvTypeSelect = document.getElementById('csvTypeSelect');
+            const csvType = csvTypeSelect ? csvTypeSelect.value : 'players';
+            const typeParam = csvType === 'bots' ? 'bots' : 'players';
+            
+            const response = await fetch(`/api/csv/export?type=${typeParam}`, {
                 headers: { 'X-API-Token': apiToken }
             });
             if (!response.ok) {
@@ -871,7 +875,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `players_${new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5)}.csv`;
+            const fileName = csvType === 'bots' ? 'bots' : 'players';
+            a.download = `${fileName}_${new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5)}.csv`;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
@@ -921,10 +926,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const loadingOverlay = Loading.show('正在导入CSV...');
         try {
-            // Read file as text
+            const csvTypeSelect = document.getElementById('csvTypeSelect');
+            const csvType = csvTypeSelect ? csvTypeSelect.value : 'players';
+            const typeParam = csvType === 'bots' ? 'bots' : 'players';
+            
+            // Read file as text with UTF-8 encoding
             const csvText = await file.text();
             
-            const response = await fetch('/api/csv/import', {
+            const response = await fetch(`/api/csv/import?type=${typeParam}`, {
                 method: 'POST',
                 headers: { 
                     'X-API-Token': apiToken,

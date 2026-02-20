@@ -63,10 +63,20 @@ public class GuestListener implements Listener {
    */
   @EventHandler
   public void onQuit(PlayerQuitEvent event) {
-    UUID uuid = event.getPlayer().getUniqueId();
+    Player player = event.getPlayer();
+    UUID uuid = player.getUniqueId();
     guestCache.remove(uuid);
     originalGameModes.remove(uuid);
     // plugin.invalidateCode(uuid); // Invalidate code from centralized manager on quit
+    
+    // Check if NPC statistics should be skipped
+    boolean skipNpcStatistics = plugin.getConfig().getBoolean("guest-mode.skip-npc-statistics", true);
+    boolean isNpc = player.hasMetadata("NPC");
+    
+    // Record player quit for statistics (skip if NPC and skip-npc-statistics is enabled)
+    if (!(skipNpcStatistics && isNpc)) {
+      plugin.recordPlayerQuit(uuid, player.getName());
+    }
   }
 
   /**
@@ -88,11 +98,14 @@ public class GuestListener implements Listener {
         List<String> whitelistedPlayers = plugin.getConfig().getStringList("whitelist.players");
         boolean bypassOps = plugin.getConfig().getBoolean("whitelist.bypass-ops", true);
         boolean allowFakePlayers = plugin.getConfig().getBoolean("guest-mode.allow-fake-players", false);
+        boolean skipNpcStatistics = plugin.getConfig().getBoolean("guest-mode.skip-npc-statistics", true);
 
         // Check for whitelisted players
         if (whitelistedPlayers.contains(player.getName())) {
           plugin.getLogger().info(player.getName() + " is whitelisted, skipping verification.");
           unmarkGuest(uuid);
+          // Record player join for statistics (even if whitelisted)
+          plugin.recordPlayerJoin(uuid, player.getName());
           return;
         }
 
@@ -100,13 +113,20 @@ public class GuestListener implements Listener {
         if (bypassOps && player.isOp()) {
           plugin.getLogger().info(player.getName() + " is an operator, skipping verification.");
           unmarkGuest(uuid);
+          // Record player join for statistics (even if op)
+          plugin.recordPlayerJoin(uuid, player.getName());
           return;
         }
 
         // Check for fake players (Citizens NPC)
-        if (allowFakePlayers && player.hasMetadata("NPC")) { // Assuming "NPC" metadata for Citizens
+        boolean isNpc = player.hasMetadata("NPC");
+        if (allowFakePlayers && isNpc) { // Assuming "NPC" metadata for Citizens
           plugin.getLogger().info(player.getName() + " is a fake player, skipping verification.");
           unmarkGuest(uuid);
+          // Record player join for statistics only if not skipping NPC statistics
+          if (!skipNpcStatistics) {
+            plugin.recordPlayerJoin(uuid, player.getName());
+          }
           return;
         }
         // --- END NEW LOGIC ---
@@ -118,6 +138,9 @@ public class GuestListener implements Listener {
           unmarkGuest(uuid); // Ensure any lingering effects are removed
           player.sendMessage(plugin.getMessageManager().getMessage("messages.guest.welcome", Map.of("%player%", player.getName())));
         }
+        
+        // Record player join for statistics
+        plugin.recordPlayerJoin(uuid, player.getName());
       });
     });
   }

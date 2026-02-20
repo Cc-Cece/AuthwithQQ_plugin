@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>登录 - 玩家控制台</title>
+    <link rel="stylesheet" href="common.css">
+    <link rel="stylesheet" href="components.css">
+    <style>
+        .admin-login-link {
+            position: fixed;
+            top: 16px;
+            right: 16px;
+            padding: 8px 16px;
+            background: var(--secondary-color);
+            color: white;
+            text-decoration: none;
+            border-radius: var(--radius);
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+        .admin-login-link:hover {
+            background: #4a4d52;
+        }
+        .login-container {
+            max-width: 400px;
+            margin: 80px auto;
+        }
+        .login-card {
+            background: var(--surface-color);
+            border-radius: var(--radius);
+            padding: 32px;
+            box-shadow: var(--shadow-2);
+        }
+        .login-title {
+            text-align: center;
+            margin-bottom: 24px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: var(--text-primary);
+            font-weight: 500;
+        }
+        .form-group input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
+            font-size: 16px;
+            transition: border-color 0.2s;
+            box-sizing: border-box;
+        }
+        .form-group input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+        }
+        .login-btn {
+            width: 100%;
+            padding: 12px;
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: var(--radius);
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .login-btn:hover:not(:disabled) {
+            background: var(--primary-hover);
+        }
+        .login-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        .help-text {
+            margin-top: 16px;
+            text-align: center;
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+        .help-text a {
+            color: var(--primary-color);
+            text-decoration: none;
+        }
+        .help-text a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <a href="admin.html" class="admin-login-link">管理员登录</a>
+    
+    <div class="login-container">
+        <div class="login-card">
+            <h1 class="login-title">玩家登录</h1>
+            <form id="loginForm">
+                <div class="form-group">
+                    <label for="identifier">玩家名或 UUID</label>
+                    <input type="text" id="identifier" name="identifier" placeholder="输入您的玩家名或 UUID" required>
+                </div>
+                <div class="form-group">
+                    <label for="password">密码</label>
+                    <input type="password" id="password" name="password" placeholder="输入您的密码" required>
+                </div>
+                <button type="submit" class="login-btn" id="loginBtn">
+                    <span id="loginBtnText">登录</span>
+                </button>
+            </form>
+            <div class="help-text">
+                <p>还没有设置密码？请在游戏内使用 <code>/bind password set &lt;密码&gt;</code> 设置密码</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="components.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const { Toast, Loading } = window.MaterialComponents;
+            const loginForm = document.getElementById('loginForm');
+            const loginBtn = document.getElementById('loginBtn');
+            const loginBtnText = document.getElementById('loginBtnText');
+            const identifierInput = document.getElementById('identifier');
+            const passwordInput = document.getElementById('password');
+
+            // Check if already logged in
+            const sessionToken = localStorage.getItem('session_token');
+            if (sessionToken) {
+                // Verify session
+                fetch('/api/auth/verify', {
+                    headers: { 'X-Session-Token': sessionToken }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.valid) {
+                        window.location.href = 'player_dashboard.html';
+                    } else {
+                        localStorage.removeItem('session_token');
+                    }
+                })
+                .catch(() => {
+                    localStorage.removeItem('session_token');
+                });
+            }
+
+            loginForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+
+                const identifier = identifierInput.value.trim();
+                const password = passwordInput.value;
+
+                if (!identifier || !password) {
+                    Toast.error('请填写所有字段');
+                    return;
+                }
+
+                Loading.button(loginBtn, true);
+                loginBtnText.textContent = '登录中...';
+
+                try {
+                    const response = await fetch('/api/auth/login', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ identifier, password })
+                    });
+
+                    const data = await response.json();
+
+                    if (data.success) {
+                        // Store session token
+                        localStorage.setItem('session_token', data.session_token);
+                        localStorage.setItem('player_uuid', data.player.uuid);
+                        localStorage.setItem('player_name', data.player.name);
+                        
+                        Toast.success('登录成功！正在跳转...');
+                        setTimeout(() => {
+                            window.location.href = 'player_dashboard.html';
+                        }, 1000);
+                    } else {
+                        Loading.button(loginBtn, false);
+                        loginBtnText.textContent = '登录';
+                        Toast.error(data.error || '登录失败');
+                    }
+                } catch (error) {
+                    Loading.button(loginBtn, false);
+                    loginBtnText.textContent = '登录';
+                    console.error('Login error:', error);
+                    Toast.error('网络错误，请稍后再试');
+                }
+            });
+        });
+    </script>
+</body>
+</html>

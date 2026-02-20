@@ -23,8 +23,11 @@ binding:
         label: "用途"
         required: false
   max-accounts-per-qq: 1 # 整数，默认 1。一个QQ号允许绑定的MC账号数量。
-  max-bots-per-player: 0 # 整数，默认 0。每个真实玩家允许绑定的假人数量。
+  max-bots-per-player: 0 # 整数，默认 0。每个真实玩家允许绑定的假人数量。0 表示禁止添加假人，负数（如 -1）表示不限制。
   profile-token-expiration: 300 # 整数，单位秒，默认 300 (5分钟)。玩家资料修改页面的会话令牌过期时间。
+  web-login-enabled: true # 布尔值，默认 true。是否启用网页登录功能。
+  web-password-min-length: 6 # 整数，默认 6。网页登录密码最小长度。
+  web-session-expiration: 1440 # 整数，单位分钟，默认 1440 (24小时)。网页登录会话过期时间，0 表示不过期。
 
 whitelist:
   players: [] # 字符串列表，玩家ID。列表中的玩家无需绑定即可进入游戏。
@@ -46,6 +49,7 @@ guest-mode:
     - "/register"
     - "/bind"
   allow-fake-players: false # 布尔值，默认 false。如果为 true，则假人（NPC）将自动跳过验证。
+  skip-npc-statistics: true # 布尔值，默认 true。如果为 true，则假人（NPC）的加入/离开事件不会被记录到统计中。
   verification-display-method: "BOTH" # 字符串，可选值："CODE_ONLY" (只发送验证码), "WEB_ONLY" (只发送网页链接), "BOTH" (两者都发送)。
 
 messages:

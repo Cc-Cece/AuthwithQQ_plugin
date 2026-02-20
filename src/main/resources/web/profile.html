@@ -11,23 +11,28 @@
 <body>
     <div class="container">
         <div class="card">
-            <h1>修改个人资料</h1>
-            <p>在此修改您的绑定信息</p>
-            <form id="profileForm">
-                <input type="hidden" id="token" name="token">
-                <input type="hidden" id="uuid" name="uuid">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <div>
+                    <h1 style="margin: 0;">修改个人资料</h1>
+                    <p style="margin: 8px 0 0 0;">在此修改您的绑定信息</p>
+                </div>
+                <a href="player_dashboard.html" id="backBtn" style="padding: 8px 16px; background: var(--secondary-color); color: white; text-decoration: none; border-radius: var(--radius); font-size: 14px; transition: background 0.2s;">返回控制台</a>
+            </div>
+        <form id="profileForm">
+            <input type="hidden" id="token" name="token">
+            <input type="hidden" id="uuid" name="uuid">
 
-                <div class="form-group">
+            <div class="form-group">
                     <label for="playerName">玩家名</label>
-                    <input type="text" id="playerName" name="playerName" readonly>
-                </div>
+                <input type="text" id="playerName" name="playerName" readonly>
+            </div>
 
-                <div class="form-group">
+            <div class="form-group">
                     <label for="currentQq">当前QQ</label>
-                    <input type="number" id="currentQq" name="currentQq" readonly>
-                </div>
+                <input type="number" id="currentQq" name="currentQq" readonly>
+            </div>
 
-                <div class="form-group">
+            <div class="form-group">
                     <label for="newQq">新QQ号</label>
                     <input type="number" id="newQq" name="newQq" 
                            placeholder="留空则不修改"
@@ -35,15 +40,15 @@
                            max="999999999999">
                     <span class="input-hint">留空则保持当前QQ号不变</span>
                     <span class="input-error" id="qqError" style="display: none;"></span>
-                </div>
+            </div>
 
-                <!-- Custom fields will be injected here by JavaScript -->
-                <div id="customFieldsContainer"></div>
+            <!-- Custom fields will be injected here by JavaScript -->
+            <div id="customFieldsContainer"></div>
 
                 <button type="submit" class="btn" id="submitBtn">
                     <span id="submitBtnText">保存修改</span>
                 </button>
-            </form>
+        </form>
         </div>
     </div>
     <script src="components.js"></script>

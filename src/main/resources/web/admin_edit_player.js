@@ -50,9 +50,9 @@ document.addEventListener('DOMContentLoaded', () => {
             return fetch(`/api/meta?type=${fieldType}`, { headers: { 'X-API-Token': apiToken } })
                 .then(async (metaResponse) => {
                     if (metaResponse.status === 401) {
-                        throw new Error('Unauthorized. 请检查您的 API Token。');
-                    }
-                    const customFieldsDefs = await metaResponse.json();
+                throw new Error('Unauthorized. 请检查您的 API Token。');
+            }
+            const customFieldsDefs = await metaResponse.json();
                     return { profile, customFieldsDefs, isBot };
                 });
         })
@@ -89,29 +89,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Dynamically create and populate custom fields
             if (Array.isArray(customFieldsDefs) && customFieldsDefs.length > 0) {
-                customFieldsDefs.forEach(fieldDef => {
-                    const formGroup = document.createElement('div');
-                    formGroup.className = 'form-group';
+            customFieldsDefs.forEach(fieldDef => {
+                const formGroup = document.createElement('div');
+                formGroup.className = 'form-group';
 
-                    const label = document.createElement('label');
-                    label.setAttribute('for', fieldDef.name);
-                    label.textContent = fieldDef.label + ':';
-                    formGroup.appendChild(label);
+                const label = document.createElement('label');
+                label.setAttribute('for', fieldDef.name);
+                label.textContent = fieldDef.label + ':';
+                formGroup.appendChild(label);
 
-                    const input = document.createElement('input');
-                    input.setAttribute('type', fieldDef.type || 'text');
-                    input.setAttribute('id', fieldDef.name);
-                    input.setAttribute('name', fieldDef.name);
-                    if (fieldDef.required) {
-                        input.setAttribute('required', 'true');
-                    }
-                    // Pre-fill with existing meta data
-                    if (profile.meta && profile.meta[fieldDef.name]) {
-                        input.value = profile.meta[fieldDef.name];
-                    }
-                    formGroup.appendChild(input);
-                    customFieldsContainer.appendChild(formGroup);
-                });
+                const input = document.createElement('input');
+                input.setAttribute('type', fieldDef.type || 'text');
+                input.setAttribute('id', fieldDef.name);
+                input.setAttribute('name', fieldDef.name);
+                if (fieldDef.required) {
+                    input.setAttribute('required', 'true');
+                }
+                // Pre-fill with existing meta data
+                if (profile.meta && profile.meta[fieldDef.name]) {
+                    input.value = profile.meta[fieldDef.name];
+                }
+                formGroup.appendChild(input);
+                customFieldsContainer.appendChild(formGroup);
+            });
             }
         })
         .catch(error => {

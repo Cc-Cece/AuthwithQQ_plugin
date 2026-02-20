@@ -3,20 +3,48 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>绑定成功</title>
+    <title>操作成功</title>
     <link rel="stylesheet" href="common.css">
     <link rel="stylesheet" href="components.css">
     <link rel="stylesheet" href="auth.css">
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // 根据 URL 参数或 referrer 显示不同的消息
+            const urlParams = new URLSearchParams(window.location.search);
+            const type = urlParams.get('type') || 'default';
+            const referrer = document.referrer;
+            
+            const titleElement = document.getElementById('successTitle');
+            const messageElement = document.getElementById('successMessage');
+            const dashboardBtn = document.getElementById('dashboardBtn');
+            
+            // 检查是否有 session token，决定是否显示玩家控制台链接
+            const sessionToken = localStorage.getItem('session_token');
+            if (sessionToken && dashboardBtn) {
+                dashboardBtn.style.display = 'inline-block';
+            }
+            
+            if (type === 'profile' || referrer.includes('profile.html')) {
+                titleElement.textContent = '资料更新成功！';
+                messageElement.textContent = '您的个人资料已成功更新。请返回游戏或重新获取链接继续编辑。';
+            } else {
+                titleElement.textContent = '绑定成功！';
+                messageElement.textContent = '您的账号已成功绑定。请返回游戏享受乐趣。';
+            }
+        });
+    </script>
 </head>
 <body>
     <div class="container">
         <div class="success-container">
             <div class="success-icon">✓</div>
-            <h1>绑定成功！</h1>
-            <p>您的账号已成功绑定。请返回游戏享受乐趣。</p>
+            <h1 id="successTitle">操作成功！</h1>
+            <p id="successMessage">操作已成功完成。</p>
             <div class="success-actions">
                 <button class="btn" onclick="window.close()">关闭窗口</button>
                 <button class="btn-secondary" onclick="history.back()">返回</button>
+                <a href="index.html" class="btn btn-secondary" style="display: inline-block; text-decoration: none; margin-left: 8px;">返回首页</a>
+                <a href="player_dashboard.html" id="dashboardBtn" class="btn btn-secondary" style="display: none; text-decoration: none; margin-left: 8px;">玩家控制台</a>
             </div>
         </div>
     </div>

@@ -12,18 +12,35 @@ document.addEventListener('DOMContentLoaded', () => {
     const submitBtn = document.getElementById('submitBtn');
     const submitBtnText = document.getElementById('submitBtnText');
 
-    // 解析 URL 参数
+    // 解析 URL 参数或从 localStorage 获取 session token
     const urlParams = new URLSearchParams(window.location.search);
-    const token = urlParams.get('token');
-
+    let token = urlParams.get('token');
+    const backBtn = document.getElementById('backBtn');
+    
+    // 如果没有 token 参数，尝试从 localStorage 获取 session token
     if (!token) {
-        Toast.error('缺少会话令牌，请重新获取链接');
-        setTimeout(() => {
-            window.location.href = 'dashboard.html';
-        }, 2000);
-        return;
+        const sessionToken = localStorage.getItem('session_token');
+        if (sessionToken) {
+            // 使用 X-Session-Token 方式，不需要设置 tokenInput
+            token = null; // 标记为使用 session token
+            // 显示返回按钮
+            if (backBtn) {
+                backBtn.style.display = 'inline-block';
+            }
+        } else {
+            Toast.error('缺少会话令牌，请重新获取链接或登录');
+            setTimeout(() => {
+                window.location.href = 'login.html';
+            }, 2000);
+            return;
+        }
+    } else {
+        tokenInput.value = token;
+        // 隐藏返回按钮（从游戏内链接进入）
+        if (backBtn) {
+            backBtn.style.display = 'none';
+        }
     }
-    tokenInput.value = token;
 
     // 显示骨架屏
     function showSkeleton() {
@@ -40,7 +57,26 @@ document.addEventListener('DOMContentLoaded', () => {
         const loadingOverlay = Loading.show('加载个人资料...');
         
         try {
-            const response = await fetch(`/api/profile?token=${token}`);
+            // 构建请求头
+            const headers = {};
+            let url = '/api/profile';
+            
+            if (token) {
+                // 使用 profile session token (查询参数)
+                url += `?token=${token}`;
+            } else {
+                // 使用 web login session token (header)
+                const sessionToken = localStorage.getItem('session_token');
+                if (sessionToken) {
+                    headers['X-Session-Token'] = sessionToken;
+                } else {
+                    throw new Error('未登录，请先登录');
+                }
+            }
+            
+            const response = await fetch(url, {
+                headers: headers
+            });
             
             if (response.status === 401) {
                 throw new Error('无效或已过期的会话令牌');
@@ -174,10 +210,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // 收集数据
         const data = {
-            token: tokenInput.value,
             qq: newQqValue ? parseInt(newQqValue) : parseInt(currentQqInput.value) || 0,
             meta: {}
         };
+        
+        // 如果使用 profile session token，添加到 data
+        if (token && tokenInput.value) {
+            data.token = tokenInput.value;
+        }
 
         // 收集自定义字段
         customFieldsContainer.querySelectorAll('input').forEach(input => {
@@ -205,11 +245,24 @@ document.addEventListener('DOMContentLoaded', () => {
         submitBtnText.textContent = '保存中...';
 
         try {
+            // 构建请求头
+            const headers = {
+                'Content-Type': 'application/json'
+            };
+            
+            // 如果使用 web login session token，添加到 header
+            if (!token) {
+                const sessionToken = localStorage.getItem('session_token');
+                if (sessionToken) {
+                    headers['X-Session-Token'] = sessionToken;
+                } else {
+                    throw new Error('未登录，请先登录');
+                }
+            }
+            
             const response = await fetch('/api/profile/update', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
+                headers: headers,
                 body: JSON.stringify(data)
             });
 
@@ -217,10 +270,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (result.success) {
                 Toast.success(result.message || '个人资料更新成功');
-                // 刷新数据
+                // 跳转到成功页面
                 setTimeout(() => {
-                    fetchProfile();
-                }, 500);
+                    window.location.href = 'success.html?type=profile';
+                }, 1000);
             } else {
                 Toast.error(result.error || '更新失败');
             }

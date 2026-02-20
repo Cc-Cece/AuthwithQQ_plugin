@@ -55,6 +55,22 @@ public class BindCommand implements CommandExecutor, TabCompleter {
             case "profile":
                 handleProfile(player);
                 return true;
+            case "password":
+                if (args.length > 1) {
+                    String passwordAction = args[1].toLowerCase();
+                    if ("set".equals(passwordAction) && args.length > 2) {
+                        handleSetPassword(player, args[2]);
+                    } else if ("remove".equals(passwordAction)) {
+                        handleRemovePassword(player);
+                    } else if ("status".equals(passwordAction)) {
+                        handlePasswordStatus(player);
+                    } else {
+                        sendPasswordHelp(player);
+                    }
+                } else {
+                    sendPasswordHelp(player);
+                }
+                return true;
             case "bot":
                 if (args.length > 2) {
                     String botAction = args[1].toLowerCase();
@@ -116,10 +132,17 @@ public class BindCommand implements CommandExecutor, TabCompleter {
         }
 
         int maxBots = plugin.getConfig().getInt("binding.max-bots-per-player", 0);
-        if (maxBots > 0 && plugin.getDatabaseManager().getBotCountForOwner(ownerUuid) >= maxBots) {
+        int currentBotCount = plugin.getDatabaseManager().getBotCountForOwner(ownerUuid);
+        if (maxBots == 0) {
+            // 0 means bot adding is disabled
+            player.sendMessage(plugin.getMessageManager().getMessage("messages.bind-command.bot.limit-reached", Collections.singletonMap("%limit%", "0")));
+            return;
+        } else if (maxBots > 0 && currentBotCount >= maxBots) {
+            // Positive number means limit check
             player.sendMessage(plugin.getMessageManager().getMessage("messages.bind-command.bot.limit-reached", Collections.singletonMap("%limit%", String.valueOf(maxBots))));
             return;
         }
+        // Negative number means unlimited, allow adding
 
         UUID botUuid = UUID.nameUUIDFromBytes(("Bot-" + botName).getBytes(StandardCharsets.UTF_8));
         
@@ -148,6 +171,41 @@ public class BindCommand implements CommandExecutor, TabCompleter {
         player.sendMessage(plugin.getMessageManager().getMessage("messages.bind-command.bot.remove-success", Collections.singletonMap("%bot_name%", botName)));
     }
 
+    private void handleSetPassword(Player player, String password) {
+        if (!plugin.getConfig().getBoolean("binding.web-login-enabled", true)) {
+            player.sendMessage(Component.text("网页登录功能已禁用", NamedTextColor.RED));
+            return;
+        }
+
+        int minLength = plugin.getConfig().getInt("binding.web-password-min-length", 6);
+        if (password.length() < minLength) {
+            player.sendMessage(Component.text("密码长度至少需要 " + minLength + " 个字符", NamedTextColor.RED));
+            return;
+        }
+
+        String passwordHash = plugin.hashPassword(password);
+        plugin.getDatabaseManager().setWebPasswordHash(player.getUniqueId(), passwordHash);
+        player.sendMessage(Component.text("密码设置成功！您现在可以在网页端登录", NamedTextColor.GREEN));
+    }
+
+    private void handleRemovePassword(Player player) {
+        plugin.getDatabaseManager().removeWebPassword(player.getUniqueId());
+        player.sendMessage(Component.text("密码已删除", NamedTextColor.GREEN));
+    }
+
+    private void handlePasswordStatus(Player player) {
+        boolean hasPassword = plugin.getDatabaseManager().hasWebPassword(player.getUniqueId());
+        if (hasPassword) {
+            player.sendMessage(Component.text("您已设置网页登录密码", NamedTextColor.GREEN));
+        } else {
+            player.sendMessage(Component.text("您尚未设置网页登录密码。使用 /bind password set <密码> 设置", NamedTextColor.YELLOW));
+        }
+    }
+
+    private void sendPasswordHelp(Player player) {
+        player.sendMessage(Component.text("用法: /bind password <set|remove|status> [密码]", NamedTextColor.RED));
+    }
+
     private void sendBotHelp(Player player) {
         // You might want to create a specific help message for /bind bot
         player.sendMessage(Component.text("用法: /bind bot <add|remove> <假人名称>", NamedTextColor.RED));
@@ -165,8 +223,16 @@ public class BindCommand implements CommandExecutor, TabCompleter {
       List<String> completions = new ArrayList<>();
       completions.add("getcode");
       completions.add("profile");
+      completions.add("password");
       completions.add("bot");
       return filter(completions, args[0]);
+    }
+    if (args.length == 2 && args[0].equalsIgnoreCase("password")) {
+      List<String> completions = new ArrayList<>();
+      completions.add("set");
+      completions.add("remove");
+      completions.add("status");
+      return filter(completions, args[1]);
     }
     if (args.length == 2 && args[0].equalsIgnoreCase("bot")) {
       List<String> completions = new ArrayList<>();

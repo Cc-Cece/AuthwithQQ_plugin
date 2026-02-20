@@ -21,7 +21,6 @@ import java.util.concurrent.Future;
 import java.util.logging.Level;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
-import org.bukkit.OfflinePlayer; // ADDED for AdminBindHandler
 
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 
@@ -76,7 +75,10 @@ public class InternalWebServer {
       server.createContext("/api/bots", new AllBotsHandler()); // New: Get all bots
       server.createContext("/api/csv/export", new CsvExportHandler()); // New: Export CSV
       server.createContext("/api/csv/import", new CsvImportHandler()); // New: Import CSV
-      server.createContext("/", new RedirectHandler("/web/dashboard.html")); // Redirect to dashboard
+      server.createContext("/api/auth/login", new AuthLoginHandler()); // New: Web login
+      server.createContext("/api/auth/logout", new AuthLogoutHandler()); // New: Web logout
+      server.createContext("/api/auth/verify", new AuthVerifyHandler()); // New: Verify session
+      server.createContext("/", new RedirectHandler("/web/index.html")); // Redirect to index
       server.createContext("/dashboard", new RedirectHandler("/web/dashboard.html")); // Explicit dashboard route
       server.createContext("/admin", new AuthenticatedRedirectHandler("/web/admin.html")); // Admin console
       server.createContext("/web", new StaticFileHandler()); // Serve static web resources
@@ -99,7 +101,11 @@ public class InternalWebServer {
 
   private boolean authenticate(HttpExchange exchange) throws IOException {
     String requestToken = exchange.getRequestHeaders().getFirst("X-API-Token");
-    if (token.equals(requestToken)) {
+    return token.equals(requestToken);
+  }
+
+  private boolean authenticateWithResponse(HttpExchange exchange) throws IOException {
+    if (authenticate(exchange)) {
       return true;
     }
     sendResponse(exchange, 401, " Unauthorized");
@@ -113,6 +119,53 @@ public class InternalWebServer {
     try (OutputStream os = exchange.getResponseBody()) {
       os.write(bytes);
     }
+  }
+
+  /**
+   * Gets player UUID from request using multiple authentication methods.
+   * Priority:
+   * 1. X-Session-Token header (web login session)
+   * 2. token query parameter (profile session token)
+   * 3. X-API-Token + uuid query parameter (admin)
+   *
+   * @param exchange The HTTP exchange.
+   * @return The player UUID, or null if not authenticated.
+   */
+  private UUID getPlayerUuidFromRequest(HttpExchange exchange) throws IOException {
+    // 1. Check X-Session-Token header (web login session)
+    String sessionToken = exchange.getRequestHeaders().getFirst("X-Session-Token");
+    if (sessionToken != null && !sessionToken.isEmpty()) {
+      UUID uuid = plugin.validateWebLoginSessionToken(sessionToken);
+      if (uuid != null) {
+        return uuid;
+      }
+    }
+
+    // 2. Check token query parameter (profile session token)
+    Map<String, String> query = AuthWithQqPlugin.parseQuery(exchange.getRequestURI().getQuery());
+    String profileToken = query.get("token");
+    if (profileToken != null && !profileToken.isEmpty()) {
+      // Use getProfileSessionTokenUuid for viewing (doesn't consume token)
+      // validateProfileSessionToken will be used in ProfileUpdateHandler to consume token
+      UUID uuid = plugin.getProfileSessionTokenUuid(profileToken);
+      if (uuid != null) {
+        return uuid;
+      }
+    }
+
+    // 3. Check admin token + uuid
+    if (authenticate(exchange)) {
+      String uuidStr = query.get("uuid");
+      if (uuidStr != null && !uuidStr.isEmpty()) {
+        try {
+          return UUID.fromString(uuidStr);
+        } catch (IllegalArgumentException e) {
+          return null;
+        }
+      }
+    }
+
+    return null;
   }
 
   private class StatusHandler implements HttpHandler {
@@ -130,9 +183,77 @@ public class InternalWebServer {
             onlinePlayerNames.add(p.getName());
           }
           json.add("online_player_names", onlinePlayerNames);
+
+          // Server version information
+          json.addProperty("server_version", Bukkit.getVersion());
+          json.addProperty("bukkit_version", Bukkit.getBukkitVersion());
+          json.addProperty("minecraft_version", Bukkit.getMinecraftVersion());
+
+          // World count
+          json.addProperty("world_count", Bukkit.getWorlds().size());
+
+          // Entity statistics
+          int totalEntities = 0;
+          int playerEntities = 0;
+          int livingEntities = 0;
+          int itemEntities = 0;
+          int otherEntities = 0;
+
+          for (org.bukkit.World world : Bukkit.getWorlds()) {
+            for (org.bukkit.entity.Entity entity : world.getEntities()) {
+              totalEntities++;
+              if (entity instanceof Player) {
+                playerEntities++;
+              } else if (entity instanceof org.bukkit.entity.LivingEntity) {
+                livingEntities++;
+              } else if (entity instanceof org.bukkit.entity.Item) {
+                itemEntities++;
+              } else {
+                otherEntities++;
+              }
+            }
+          }
+
+          json.addProperty("total_entities", totalEntities);
+          json.addProperty("player_entities", playerEntities);
+          json.addProperty("living_entities", livingEntities);
+          json.addProperty("item_entities", itemEntities);
+          json.addProperty("other_entities", otherEntities);
+
+          // Today's online statistics
+          json.addProperty("today_unique_players", plugin.getTodayUniquePlayers());
+          long todayTotalOnlineTime = plugin.getTodayTotalOnlineTime();
+          json.addProperty("today_total_online_time_ms", todayTotalOnlineTime);
+          
+          // Player online times list
+          com.google.gson.JsonArray playerTimesArray = new com.google.gson.JsonArray();
+          Map<String, Long> playerOnlineTimes = plugin.getTodayPlayerOnlineTimes();
+          for (Map.Entry<String, Long> entry : playerOnlineTimes.entrySet()) {
+            JsonObject playerTimeObj = new JsonObject();
+            playerTimeObj.addProperty("player_name", entry.getKey());
+            playerTimeObj.addProperty("online_time_ms", entry.getValue());
+            playerTimesArray.add(playerTimeObj);
+          }
+          json.add("today_player_online_times", playerTimesArray);
+          
+          // Recent player activities
+          com.google.gson.JsonArray activitiesArray = new com.google.gson.JsonArray();
+          for (AuthWithQqPlugin.ActivityEntry activity : plugin.getRecentActivities()) {
+            JsonObject activityObj = new JsonObject();
+            activityObj.addProperty("player_name", activity.playerName);
+            activityObj.addProperty("activity_type", activity.activityType);
+            activityObj.addProperty("timestamp", activity.timestamp);
+            activitiesArray.add(activityObj);
+          }
+          json.add("recent_activities", activitiesArray);
+
           return json;
         });
         JsonObject json = future.get(); // This blocks until the main thread runs the code
+
+        // Server uptime
+        long uptimeMillis = System.currentTimeMillis() - plugin.getServerStartTime();
+        json.addProperty("uptime_millis", uptimeMillis);
 
         long freeMemory = Runtime.getRuntime().freeMemory() / 1024 / 1024;
         long totalMemory = Runtime.getRuntime().totalMemory() / 1024 / 1024;
@@ -150,7 +271,7 @@ public class InternalWebServer {
   private class CheckHandler implements HttpHandler {
     @Override
     public void handle(HttpExchange exchange) throws IOException {
-      if (!authenticate(exchange)) {
+      if (!authenticateWithResponse(exchange)) {
         return;
       }
 
@@ -246,7 +367,7 @@ public class InternalWebServer {
   private class KickHandler implements HttpHandler {
     @Override
     public void handle(HttpExchange exchange) throws IOException {
-      if (!authenticate(exchange)) {
+      if (!authenticateWithResponse(exchange)) {
         return;
       }
       if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
@@ -277,7 +398,7 @@ public class InternalWebServer {
   private class WhitelistHandler implements HttpHandler {
     @Override
     public void handle(HttpExchange exchange) throws IOException {
-      if (!authenticate(exchange)) {
+      if (!authenticateWithResponse(exchange)) {
         return;
       }
       if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
@@ -306,7 +427,7 @@ public class InternalWebServer {
   private class ConfigHandler implements HttpHandler {
     @Override
     public void handle(HttpExchange exchange) throws IOException {
-      if (!authenticate(exchange)) {
+      if (!authenticateWithResponse(exchange)) {
         return;
       }
 
@@ -355,7 +476,7 @@ public class InternalWebServer {
 
     @Override
     public void handle(HttpExchange exchange) throws IOException {
-      if (!authenticate(exchange)) {
+      if (!authenticateWithResponse(exchange)) {
         return;
       }
       exchange.getResponseHeaders().set("Location", targetPath);
@@ -411,7 +532,7 @@ public class InternalWebServer {
   private class PlayersHandler implements HttpHandler {
     @Override
     public void handle(HttpExchange exchange) throws IOException {
-      if (!authenticate(exchange)) {
+      if (!authenticateWithResponse(exchange)) {
         return;
       }
 
@@ -429,7 +550,7 @@ public class InternalWebServer {
   private class UnbindHandler implements HttpHandler {
     @Override
     public void handle(HttpExchange exchange) throws IOException {
-      if (!authenticate(exchange)) {
+      if (!authenticateWithResponse(exchange)) {
         return;
       }
       if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
@@ -478,7 +599,7 @@ public class InternalWebServer {
   private class BotBindHandler implements HttpHandler {
     @Override
     public void handle(HttpExchange exchange) throws IOException {
-        if (!authenticate(exchange)) {
+        if (!authenticateWithResponse(exchange)) {
             return;
         }
       if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
@@ -528,10 +649,16 @@ public class InternalWebServer {
         // Check bot limit
         int maxBotsPerPlayer = plugin.getConfig().getInt("binding.max-bots-per-player", 0);
         int currentBotCount = plugin.getDatabaseManager().getBotCountForOwner(ownerUuid);
-        if (maxBotsPerPlayer > 0 && currentBotCount >= maxBotsPerPlayer) { 
+        if (maxBotsPerPlayer == 0) {
+          // 0 means bot adding is disabled
+          sendResponse(exchange, 400, "{\"success\":false, \"error\":\"假人添加功能已禁用\"}");
+          return;
+        } else if (maxBotsPerPlayer > 0 && currentBotCount >= maxBotsPerPlayer) {
+          // Positive number means limit check
           sendResponse(exchange, 400, "{\"success\":false, \"error\":\"达到假人绑定上限\"}");
           return;
         }
+        // Negative number means unlimited, allow adding
 
         // Generate a UUID for the bot (deterministic based on name for consistency)
         UUID botUuid = UUID.nameUUIDFromBytes(("Bot-" + botName).getBytes(StandardCharsets.UTF_8));
@@ -602,7 +729,7 @@ public class InternalWebServer {
   private class AdminBindHandler implements HttpHandler {
     @Override
     public void handle(HttpExchange exchange) throws IOException {
-      if (!authenticate(exchange)) {
+      if (!authenticateWithResponse(exchange)) {
         return;
       }
       if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
@@ -670,21 +797,16 @@ public class InternalWebServer {
       }
 
       Map<String, String> query = AuthWithQqPlugin.parseQuery(exchange.getRequestURI().getQuery());
-      String token = query.get("token"); // Player session token
       String playerUuidString = query.get("uuid"); // Player UUID for admin access
 
       UUID uuid = null; // Final UUID to fetch profile for
 
-      if (token != null && !token.isEmpty()) {
-        // Player access using session token
-        uuid = plugin.validateProfileSessionToken(token);
-        if (uuid == null) {
-          sendResponse(exchange, 401, "{\"error\":\"Invalid or expired session token\"}");
-          return;
-        }
-      } else if (playerUuidString != null && !playerUuidString.isEmpty()) {
+      // Try to get UUID from request (supports X-Session-Token, token query, or admin)
+      uuid = getPlayerUuidFromRequest(exchange);
+      
+      if (uuid == null && playerUuidString != null && !playerUuidString.isEmpty()) {
         // Admin access using X-API-Token and player UUID
-        if (!authenticate(exchange)) { // Authenticate admin
+        if (!authenticateWithResponse(exchange)) { // Authenticate admin
           return;
         }
         try {
@@ -693,9 +815,10 @@ public class InternalWebServer {
           sendResponse(exchange, 400, "Invalid player UUID format");
           return;
         }
-      } else {
-        // Neither token nor uuid provided
-        sendResponse(exchange, 400, "Missing session token or player UUID");
+      }
+      
+      if (uuid == null) {
+        sendResponse(exchange, 401, "{\"error\":\"Unauthorized. Please provide X-Session-Token header, token query parameter, or admin credentials.\"}");
         return;
       }
 
@@ -774,35 +897,36 @@ public class InternalWebServer {
       try (BufferedReader reader = new BufferedReader(
           new InputStreamReader(exchange.getRequestBody(), StandardCharsets.UTF_8))) {
         JsonObject body = gson.fromJson(reader, JsonObject.class);
-        String tokenFromBody = body.has("token") ? body.get("token").getAsString() : null; // Token for player session
         String playerUuidStringFromBody = body.has("uuid") ? body.get("uuid").getAsString() : null; // UUID for admin context
+        String tokenFromBody = body.has("token") ? body.get("token").getAsString() : null; // Profile session token from body
 
         UUID uuidToUpdate = null; // Final UUID to update profile for
 
-        // Try to authenticate as admin first
-        boolean isAdminAuthenticated = authenticate(exchange); // This checks X-API-Token header
+        // First, try to get UUID from request headers/query (supports X-Session-Token, token query, or admin)
+        uuidToUpdate = getPlayerUuidFromRequest(exchange);
 
-        if (isAdminAuthenticated) {
-          // Admin update: UUID comes from body (admin_edit_player.js sends it)
-          if (playerUuidStringFromBody == null || playerUuidStringFromBody.isEmpty()) {
-            sendResponse(exchange, 400, "Missing player UUID in request body for admin update");
-            return;
-          }
-          try {
-            uuidToUpdate = UUID.fromString(playerUuidStringFromBody);
-          } catch (IllegalArgumentException e) {
-            sendResponse(exchange, 400, "Invalid player UUID format in request body for admin update");
-            return;
-          }
-        } else {
-          // Player update: UUID derived from session token
-          if (tokenFromBody == null || tokenFromBody.isEmpty()) {
-            sendResponse(exchange, 400, "Missing session token");
-            return;
-          }
+        // If not found, try profile session token from body
+        if (uuidToUpdate == null && tokenFromBody != null && !tokenFromBody.isEmpty()) {
           uuidToUpdate = plugin.validateProfileSessionToken(tokenFromBody);
-          if (uuidToUpdate == null) {
-            sendResponse(exchange, 401, "{\"error\":\"Invalid or expired session token\"}");
+        }
+
+        // If still not found, try admin authentication with UUID from body
+        if (uuidToUpdate == null) {
+          boolean isAdminAuthenticated = authenticate(exchange); // This checks X-API-Token header
+          if (isAdminAuthenticated) {
+            // Admin update: UUID comes from body (admin_edit_player.js sends it)
+            if (playerUuidStringFromBody == null || playerUuidStringFromBody.isEmpty()) {
+              sendResponse(exchange, 400, "Missing player UUID in request body for admin update");
+              return;
+            }
+            try {
+              uuidToUpdate = UUID.fromString(playerUuidStringFromBody);
+            } catch (IllegalArgumentException e) {
+              sendResponse(exchange, 400, "Invalid player UUID format in request body for admin update");
+              return;
+            }
+          } else {
+            sendResponse(exchange, 401, "{\"error\":\"Unauthorized. Please provide X-Session-Token header, token query parameter, token in request body, or admin credentials.\"}");
             return;
           }
         }
@@ -883,7 +1007,7 @@ public class InternalWebServer {
   private class BotUnbindHandler implements HttpHandler {
     @Override
     public void handle(HttpExchange exchange) throws IOException {
-        if (!authenticate(exchange)) {
+        if (!authenticateWithResponse(exchange)) {
             return;
         }
       if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
@@ -929,7 +1053,7 @@ public class InternalWebServer {
                   sendResponse(exchange, 405, "{\"success\":false, \"error\":\"Method not allowed\"}");
                   return;
               }
-              if (!authenticate(exchange)) {
+              if (!authenticateWithResponse(exchange)) {
                   return; // Response already sent
               }
       
@@ -1047,21 +1171,32 @@ public class InternalWebServer {
       private class UserBotsHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange exchange) throws IOException {
-            Map<String, String> query = AuthWithQqPlugin.parseQuery(exchange.getRequestURI().getQuery());
-            String token = query.get("token");
-            if (token == null) {
-                sendResponse(exchange, 400, "{\"success\":false, \"error\":\"Missing session token\"}");
-                return;
-            }
-
-            UUID ownerUuid = plugin.validateProfileSessionToken(token);
+            UUID ownerUuid = getPlayerUuidFromRequest(exchange);
             if (ownerUuid == null) {
-                sendResponse(exchange, 401, "{\"success\":false, \"error\":\"Invalid or expired session token\"}");
+                sendResponse(exchange, 401, "{\"success\":false, \"error\":\"Unauthorized. Please provide X-Session-Token header or token query parameter.\"}");
                 return;
             }
 
             List<Map<String, String>> bots = plugin.getDatabaseManager().getBotsByOwner(ownerUuid);
-            sendResponse(exchange, 200, gson.toJson(bots));
+            int maxBots = plugin.getConfig().getInt("binding.max-bots-per-player", 0);
+            
+            JsonObject response = new JsonObject();
+            com.google.gson.JsonArray botsArray = new com.google.gson.JsonArray();
+            for (Map<String, String> bot : bots) {
+                JsonObject botObj = new JsonObject();
+                for (Map.Entry<String, String> entry : bot.entrySet()) {
+                    botObj.addProperty(entry.getKey(), entry.getValue());
+                }
+                botsArray.add(botObj);
+            }
+            response.add("bots", botsArray);
+            response.addProperty("current_count", bots.size());
+            response.addProperty("max_limit", maxBots);
+            // limit_enabled: true if maxBots > 0 (has limit), false if maxBots == 0 (disabled) or maxBots < 0 (unlimited)
+            response.addProperty("limit_enabled", maxBots > 0);
+            response.addProperty("unlimited", maxBots < 0);
+            
+            sendResponse(exchange, 200, gson.toJson(response));
         }
     }
 
@@ -1073,33 +1208,54 @@ public class InternalWebServer {
                 return;
             }
 
+            UUID ownerUuid = getPlayerUuidFromRequest(exchange);
+            if (ownerUuid == null) {
+                sendResponse(exchange, 401, "{\"success\":false, \"error\":\"Unauthorized. Please provide X-Session-Token header or token query parameter.\"}");
+                return;
+            }
+
             try (BufferedReader reader = new BufferedReader(new InputStreamReader(exchange.getRequestBody(), StandardCharsets.UTF_8))) {
                 JsonObject body = gson.fromJson(reader, JsonObject.class);
-                String token = body.has("token") ? body.get("token").getAsString() : null;
                 String botName = body.has("bot_name") ? body.get("bot_name").getAsString() : null;
 
-                if (token == null || botName == null || botName.isEmpty()) {
-                    sendResponse(exchange, 400, "{\"success\":false, \"error\":\"Missing token or bot_name\"}");
-                    return;
-                }
-
-                UUID ownerUuid = plugin.validateProfileSessionToken(token);
-                if (ownerUuid == null) {
-                    sendResponse(exchange, 401, "{\"success\":false, \"error\":\"Invalid or expired session token\"}");
+                if (botName == null || botName.isEmpty()) {
+                    sendResponse(exchange, 400, "{\"success\":false, \"error\":\"Missing bot_name\"}");
                     return;
                 }
 
                 int maxBots = plugin.getConfig().getInt("binding.max-bots-per-player", 0);
-                if (maxBots > 0 && plugin.getDatabaseManager().getBotCountForOwner(ownerUuid) >= maxBots) {
-                    sendResponse(exchange, 400, "{\"success\":false, \"error\":\"Bot limit reached\"}");
+                int currentBotCount = plugin.getDatabaseManager().getBotCountForOwner(ownerUuid);
+                if (maxBots == 0) {
+                    // 0 means bot adding is disabled
+                    JsonObject errorResponse = new JsonObject();
+                    errorResponse.addProperty("success", false);
+                    errorResponse.addProperty("error", "Bot adding is disabled");
+                    errorResponse.addProperty("current_count", currentBotCount);
+                    errorResponse.addProperty("max_limit", 0);
+                    sendResponse(exchange, 400, gson.toJson(errorResponse));
+                    return;
+                } else if (maxBots > 0 && currentBotCount >= maxBots) {
+                    // Positive number means limit check
+                    JsonObject errorResponse = new JsonObject();
+                    errorResponse.addProperty("success", false);
+                    errorResponse.addProperty("error", "Bot limit reached");
+                    errorResponse.addProperty("current_count", currentBotCount);
+                    errorResponse.addProperty("max_limit", maxBots);
+                    sendResponse(exchange, 400, gson.toJson(errorResponse));
                     return;
                 }
+                // Negative number means unlimited, allow adding
 
                 UUID botUuid = UUID.nameUUIDFromBytes(("Bot-" + botName).getBytes(StandardCharsets.UTF_8));
                 
                 plugin.getDatabaseManager().markPlayerAsBot(botUuid, ownerUuid, botName);
 
-                sendResponse(exchange, 200, "{\"success\":true, \"message\":\"Bot bound successfully\"}");
+                JsonObject successResponse = new JsonObject();
+                successResponse.addProperty("success", true);
+                successResponse.addProperty("message", "Bot bound successfully");
+                successResponse.addProperty("current_count", currentBotCount + 1);
+                successResponse.addProperty("max_limit", maxBots);
+                sendResponse(exchange, 200, gson.toJson(successResponse));
 
             } catch (Exception e) {
                 plugin.getLogger().log(Level.SEVERE, "Error in UserBotBindHandler", e);
@@ -1116,19 +1272,18 @@ public class InternalWebServer {
                 return;
             }
 
+            UUID ownerUuid = getPlayerUuidFromRequest(exchange);
+            if (ownerUuid == null) {
+                sendResponse(exchange, 401, "{\"success\":false, \"error\":\"Unauthorized. Please provide X-Session-Token header or token query parameter.\"}");
+                return;
+            }
+
             try (BufferedReader reader = new BufferedReader(new InputStreamReader(exchange.getRequestBody(), StandardCharsets.UTF_8))) {
                 JsonObject body = gson.fromJson(reader, JsonObject.class);
-                String token = body.has("token") ? body.get("token").getAsString() : null;
                 String botUuidStr = body.has("bot_uuid") ? body.get("bot_uuid").getAsString() : null;
 
-                if (token == null || botUuidStr == null) {
-                    sendResponse(exchange, 400, "{\"success\":false, \"error\":\"Missing token or bot_uuid\"}");
-                    return;
-                }
-
-                UUID ownerUuid = plugin.validateProfileSessionToken(token);
-                if (ownerUuid == null) {
-                    sendResponse(exchange, 401, "{\"success\":false, \"error\":\"Invalid or expired session token\"}");
+                if (botUuidStr == null) {
+                    sendResponse(exchange, 400, "{\"success\":false, \"error\":\"Missing bot_uuid\"}");
                     return;
                 }
                 
@@ -1154,7 +1309,7 @@ public class InternalWebServer {
     private class AllBotsHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange exchange) throws IOException {
-            if (!authenticate(exchange)) {
+            if (!authenticateWithResponse(exchange)) {
                 return;
             }
 
@@ -1178,16 +1333,35 @@ public class InternalWebServer {
     private class CsvExportHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange exchange) throws IOException {
-            if (!authenticate(exchange)) {
+            if (!authenticateWithResponse(exchange)) {
                 return;
             }
 
             try {
-                List<String> metaKeys = plugin.getDatabaseManager().getAllMetaKeys();
-                List<String> headers = new java.util.ArrayList<>(java.util.Arrays.asList("UUID", "Name", "QQ", "Created"));
-                headers.addAll(metaKeys);
+                // Parse query parameters to determine export type
+                Map<String, String> query = AuthWithQqPlugin.parseQuery(exchange.getRequestURI().getQuery());
+                String type = query != null ? query.getOrDefault("type", "players") : "players";
+                boolean isBots = "bots".equalsIgnoreCase(type);
 
-                List<Map<String, String>> allData = plugin.getDatabaseManager().getAllPlayersData();
+                List<String> headers;
+                List<Map<String, String>> allData;
+                String fileNamePrefix;
+
+                if (isBots) {
+                    // Export bots data
+                    headers = new java.util.ArrayList<>(java.util.Arrays.asList(
+                        "假人UUID", "假人名称", "所有者UUID", "所有者名称", "所有者QQ", "创建时间"
+                    ));
+                    allData = plugin.getDatabaseManager().getAllBotsData();
+                    fileNamePrefix = "bots";
+                } else {
+                    // Export players data
+                    List<String> metaKeys = plugin.getDatabaseManager().getAllMetaKeys();
+                    headers = new java.util.ArrayList<>(java.util.Arrays.asList("UUID", "名称", "QQ", "创建时间"));
+                    headers.addAll(metaKeys);
+                    allData = plugin.getDatabaseManager().getAllPlayersData();
+                    fileNamePrefix = "players";
+                }
 
                 StringBuilder csv = new StringBuilder();
                 // Write header
@@ -1198,7 +1372,53 @@ public class InternalWebServer {
                 for (Map<String, String> row : allData) {
                     List<String> line = new java.util.ArrayList<>();
                     for (String header : headers) {
-                        String value = row.getOrDefault(header, "");
+                        String value = "";
+                        if (isBots) {
+                            // Map Chinese headers to English keys for bots
+                            switch (header) {
+                                case "假人UUID":
+                                    value = row.getOrDefault("bot_uuid", "");
+                                    break;
+                                case "假人名称":
+                                    value = row.getOrDefault("bot_name", "");
+                                    break;
+                                case "所有者UUID":
+                                    value = row.getOrDefault("owner_uuid", "");
+                                    break;
+                                case "所有者名称":
+                                    value = row.getOrDefault("owner_name", "");
+                                    break;
+                                case "所有者QQ":
+                                    value = row.getOrDefault("owner_qq", "");
+                                    break;
+                                case "创建时间":
+                                    value = row.getOrDefault("created_at", "");
+                                    break;
+                                default:
+                                    value = row.getOrDefault(header, "");
+                                    break;
+                            }
+                        } else {
+                            // Map Chinese headers to English keys for players
+                            switch (header) {
+                                case "UUID":
+                                    value = row.getOrDefault("UUID", "");
+                                    break;
+                                case "名称":
+                                    value = row.getOrDefault("Name", "");
+                                    break;
+                                case "QQ":
+                                    value = row.getOrDefault("QQ", "");
+                                    break;
+                                case "创建时间":
+                                    value = row.getOrDefault("Created", "");
+                                    break;
+                                default:
+                                    // For meta keys, use as-is
+                                    value = row.getOrDefault(header, "");
+                                    break;
+                            }
+                        }
                         // Escape commas and quotes in CSV
                         if (value.contains(",") || value.contains("\"") || value.contains("\n")) {
                             value = "\"" + value.replace("\"", "\"\"") + "\"";
@@ -1211,10 +1431,16 @@ public class InternalWebServer {
 
                 exchange.getResponseHeaders().set("Content-Type", "text/csv; charset=utf-8");
                 exchange.getResponseHeaders().set("Content-Disposition", 
-                    "attachment; filename=\"players_" + 
+                    "attachment; filename=\"" + fileNamePrefix + "_" + 
                     new java.text.SimpleDateFormat("yyyyMMdd_HHmmss").format(new java.util.Date()) + ".csv\"");
                 
-                byte[] bytes = csv.toString().getBytes(StandardCharsets.UTF_8);
+                // Add UTF-8 BOM for Excel compatibility with Chinese characters
+                byte[] bom = {(byte)0xEF, (byte)0xBB, (byte)0xBF};
+                byte[] csvBytes = csv.toString().getBytes(StandardCharsets.UTF_8);
+                byte[] bytes = new byte[bom.length + csvBytes.length];
+                System.arraycopy(bom, 0, bytes, 0, bom.length);
+                System.arraycopy(csvBytes, 0, bytes, bom.length, csvBytes.length);
+                
                 exchange.sendResponseHeaders(200, bytes.length);
                 try (OutputStream os = exchange.getResponseBody()) {
                     os.write(bytes);
@@ -1230,7 +1456,7 @@ public class InternalWebServer {
     private class CsvImportHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange exchange) throws IOException {
-            if (!authenticate(exchange)) {
+            if (!authenticateWithResponse(exchange)) {
                 return;
             }
             if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
@@ -1239,6 +1465,11 @@ public class InternalWebServer {
             }
 
             try {
+                // Parse query parameters to determine import type
+                Map<String, String> query = AuthWithQqPlugin.parseQuery(exchange.getRequestURI().getQuery());
+                String type = query != null ? query.getOrDefault("type", "players") : "players";
+                boolean isBots = "bots".equalsIgnoreCase(type);
+                
                 // Read CSV content from request body
                 String csvContent;
                 String contentType = exchange.getRequestHeaders().getFirst("Content-Type");
@@ -1284,28 +1515,131 @@ public class InternalWebServer {
                     return;
                 }
 
-                // Parse and import CSV using existing CsvManager
-                java.io.File tempFile = java.io.File.createTempFile("csv_import_", ".csv");
-                try {
-                    try (java.io.FileWriter writer = new java.io.FileWriter(tempFile, StandardCharsets.UTF_8)) {
-                        writer.write(csvContent);
-                    }
-                    
-                    // Use existing CsvManager to import
-                    plugin.getCsvManager().importCsv(tempFile);
-                    
-                    // Count imported records
-                    int importedCount = csvContent.split("\n").length - 1; // Subtract header
-                    if (importedCount < 0) importedCount = 0;
-                    
-                    JsonObject result = new JsonObject();
-                    result.addProperty("success", true);
-                    result.addProperty("imported", importedCount);
-                    result.addProperty("message", String.format("导入完成: 成功导入 %d 条记录", importedCount));
-                    sendResponse(exchange, 200, gson.toJson(result));
-                } finally {
-                    tempFile.delete();
+                // Remove UTF-8 BOM if present
+                if (csvContent.startsWith("\uFEFF")) {
+                    csvContent = csvContent.substring(1);
                 }
+
+                int importedCount = 0;
+                
+                if (isBots) {
+                    // Import bots data
+                    try (BufferedReader reader = new BufferedReader(
+                            new java.io.StringReader(csvContent))) {
+                        String headerLine = reader.readLine();
+                        if (headerLine == null) {
+                            sendResponse(exchange, 400, "{\"success\":false, \"error\":\"Empty CSV header\"}");
+                            return;
+                        }
+                        
+                        // Parse header - support both Chinese and English headers
+                        String[] headers = headerLine.split(",");
+                        int botUuidIdx = -1, botNameIdx = -1, ownerUuidIdx = -1, ownerNameIdx = -1, ownerQqIdx = -1;
+                        for (int i = 0; i < headers.length; i++) {
+                            String header = headers[i].trim().replace("\"", "");
+                            if (header.equals("假人UUID") || header.equals("bot_uuid")) {
+                                botUuidIdx = i;
+                            } else if (header.equals("假人名称") || header.equals("bot_name")) {
+                                botNameIdx = i;
+                            } else if (header.equals("所有者UUID") || header.equals("owner_uuid")) {
+                                ownerUuidIdx = i;
+                            } else if (header.equals("所有者名称") || header.equals("owner_name")) {
+                                ownerNameIdx = i;
+                            } else if (header.equals("所有者QQ") || header.equals("owner_qq")) {
+                                ownerQqIdx = i;
+                            }
+                        }
+                        
+                        if (botUuidIdx == -1 || botNameIdx == -1) {
+                            sendResponse(exchange, 400, "{\"success\":false, \"error\":\"Missing required columns: 假人UUID/bot_uuid and 假人名称/bot_name\"}");
+                            return;
+                        }
+                        
+                        String line;
+                        while ((line = reader.readLine()) != null) {
+                            if (line.trim().isEmpty()) continue;
+                            
+                            // Parse CSV line (simple split, handle quoted values)
+                            List<String> values = parseCsvLine(line);
+                            if (values.size() <= Math.max(botUuidIdx, botNameIdx)) {
+                                continue;
+                            }
+                            
+                            String botUuidStr = values.get(botUuidIdx).trim().replace("\"", "");
+                            String botName = values.get(botNameIdx).trim().replace("\"", "");
+                            
+                            if (botUuidStr.isEmpty() || botName.isEmpty()) {
+                                continue;
+                            }
+                            
+                            UUID botUuid;
+                            try {
+                                botUuid = UUID.fromString(botUuidStr);
+                            } catch (IllegalArgumentException e) {
+                                continue;
+                            }
+                            
+                            UUID ownerUuid = null;
+                            if (ownerUuidIdx >= 0 && ownerUuidIdx < values.size()) {
+                                String ownerUuidStr = values.get(ownerUuidIdx).trim().replace("\"", "");
+                                if (!ownerUuidStr.isEmpty()) {
+                                    try {
+                                        ownerUuid = UUID.fromString(ownerUuidStr);
+                                    } catch (IllegalArgumentException e) {
+                                        // Try to find by name or QQ
+                                        if (ownerNameIdx >= 0 && ownerNameIdx < values.size()) {
+                                            String ownerName = values.get(ownerNameIdx).trim().replace("\"", "");
+                                            if (!ownerName.isEmpty()) {
+                                                ownerUuid = plugin.getDatabaseManager().findUuidByNameOrQq(ownerName);
+                                            }
+                                        }
+                                        if (ownerUuid == null && ownerQqIdx >= 0 && ownerQqIdx < values.size()) {
+                                            String ownerQqStr = values.get(ownerQqIdx).trim().replace("\"", "");
+                                            if (!ownerQqStr.isEmpty()) {
+                                                try {
+                                                    long ownerQq = Long.parseLong(ownerQqStr);
+                                                    ownerUuid = plugin.getDatabaseManager().findUuidByQq(ownerQq);
+                                                } catch (NumberFormatException ignored) {
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            if (ownerUuid == null) {
+                                continue; // Skip if owner cannot be determined
+                            }
+                            
+                            // Import bot
+                            plugin.getDatabaseManager().markPlayerAsBot(botUuid, ownerUuid, botName);
+                            importedCount++;
+                        }
+                    }
+                } else {
+                    // Import players data using existing CsvManager
+                    java.io.File tempFile = java.io.File.createTempFile("csv_import_", ".csv");
+                    try {
+                        try (java.io.FileWriter writer = new java.io.FileWriter(tempFile, StandardCharsets.UTF_8)) {
+                            writer.write(csvContent);
+                        }
+                        
+                        // Use existing CsvManager to import
+                        plugin.getCsvManager().importCsv(tempFile);
+                        
+                        // Count imported records
+                        importedCount = csvContent.split("\n").length - 1; // Subtract header
+                        if (importedCount < 0) importedCount = 0;
+                    } finally {
+                        tempFile.delete();
+                    }
+                }
+                
+                JsonObject result = new JsonObject();
+                result.addProperty("success", true);
+                result.addProperty("imported", importedCount);
+                result.addProperty("message", String.format("导入完成: 成功导入 %d 条记录", importedCount));
+                sendResponse(exchange, 200, gson.toJson(result));
 
             } catch (Exception e) {
                 plugin.getLogger().log(Level.SEVERE, "Error importing CSV", e);
@@ -1313,6 +1647,35 @@ public class InternalWebServer {
             }
         }
 
+        private List<String> parseCsvLine(String line) {
+            List<String> values = new java.util.ArrayList<>();
+            boolean inQuotes = false;
+            StringBuilder currentValue = new StringBuilder();
+            
+            for (int i = 0; i < line.length(); i++) {
+                char c = line.charAt(i);
+                if (c == '"') {
+                    if (inQuotes && i + 1 < line.length() && line.charAt(i + 1) == '"') {
+                        // Escaped quote
+                        currentValue.append('"');
+                        i++; // Skip next quote
+                    } else {
+                        // Toggle quote state
+                        inQuotes = !inQuotes;
+                    }
+                } else if (c == ',' && !inQuotes) {
+                    // End of field
+                    values.add(currentValue.toString());
+                    currentValue = new StringBuilder();
+                } else {
+                    currentValue.append(c);
+                }
+            }
+            // Add last field
+            values.add(currentValue.toString());
+            return values;
+        }
+        
         private String extractCsvFromMultipart(String body, String boundary) {
             int startIdx = body.indexOf(boundary);
             if (startIdx == -1) {
@@ -1342,6 +1705,135 @@ public class InternalWebServer {
                 content = content.substring(0, content.length() - (content.endsWith("\r\n") ? 2 : 1));
             }
             return content;
+        }
+    }
+
+    // --- Authentication API Handlers ---
+
+    private class AuthLoginHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+                sendResponse(exchange, 405, "{\"success\":false, \"error\":\"Method not allowed\"}");
+                return;
+            }
+
+            try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(exchange.getRequestBody(), StandardCharsets.UTF_8))) {
+                JsonObject body = gson.fromJson(reader, JsonObject.class);
+                String identifier = body.has("identifier") ? body.get("identifier").getAsString() : 
+                                   (body.has("uuid") ? body.get("uuid").getAsString() : 
+                                   (body.has("name") ? body.get("name").getAsString() : null));
+                String password = body.has("password") ? body.get("password").getAsString() : null;
+
+                if (identifier == null || identifier.isEmpty() || password == null || password.isEmpty()) {
+                    sendResponse(exchange, 400, "{\"success\":false, \"error\":\"Missing identifier (UUID or player name) or password\"}");
+                    return;
+                }
+
+                UUID uuid = null;
+                String playerName = null;
+
+                // Try to parse as UUID first
+                try {
+                    uuid = UUID.fromString(identifier);
+                    playerName = plugin.getDatabaseManager().getNameByUuid(uuid);
+                } catch (IllegalArgumentException e) {
+                    // Not a UUID, try as player name
+                    uuid = plugin.getDatabaseManager().getPlayerUuid(identifier);
+                    if (uuid != null) {
+                        // Get the actual player name from database (case-insensitive match)
+                        playerName = plugin.getDatabaseManager().getNameByUuid(uuid);
+                    }
+                }
+
+                // Check if player exists
+                if (uuid == null || playerName == null) {
+                    sendResponse(exchange, 404, "{\"success\":false, \"error\":\"Player not found\"}");
+                    return;
+                }
+
+                // Check if password is set
+                String passwordHash = plugin.getDatabaseManager().getWebPasswordHash(uuid);
+                if (passwordHash == null || passwordHash.isEmpty()) {
+                    sendResponse(exchange, 403, "{\"success\":false, \"error\":\"Password not set. Please set password in-game using /bind password set\"}");
+                    return;
+                }
+
+                // Verify password
+                if (!plugin.verifyPassword(password, passwordHash)) {
+                    sendResponse(exchange, 401, "{\"success\":false, \"error\":\"Invalid password\"}");
+                    return;
+                }
+
+                // Create session
+                String sessionToken = plugin.createWebLoginSession(uuid);
+                long expiresAt = plugin.getWebLoginSession(sessionToken).expiresAt;
+
+                JsonObject response = new JsonObject();
+                response.addProperty("success", true);
+                response.addProperty("session_token", sessionToken);
+                response.addProperty("expires_at", expiresAt);
+                JsonObject playerObj = new JsonObject();
+                playerObj.addProperty("uuid", uuid.toString());
+                playerObj.addProperty("name", playerName);
+                response.add("player", playerObj);
+
+                sendResponse(exchange, 200, gson.toJson(response));
+            } catch (Exception e) {
+                plugin.getLogger().log(Level.SEVERE, "Error in AuthLoginHandler", e);
+                sendResponse(exchange, 500, "{\"success\":false, \"error\":\"Internal server error\"}");
+            }
+        }
+    }
+
+    private class AuthLogoutHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+                sendResponse(exchange, 405, "{\"success\":false, \"error\":\"Method not allowed\"}");
+                return;
+            }
+
+            String sessionToken = exchange.getRequestHeaders().getFirst("X-Session-Token");
+            if (sessionToken != null && !sessionToken.isEmpty()) {
+                plugin.revokeWebLoginSession(sessionToken);
+            }
+
+            JsonObject response = new JsonObject();
+            response.addProperty("success", true);
+            sendResponse(exchange, 200, gson.toJson(response));
+        }
+    }
+
+    private class AuthVerifyHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            String sessionToken = exchange.getRequestHeaders().getFirst("X-Session-Token");
+            if (sessionToken == null || sessionToken.isEmpty()) {
+                JsonObject response = new JsonObject();
+                response.addProperty("valid", false);
+                response.addProperty("error", "Missing session token");
+                sendResponse(exchange, 401, gson.toJson(response));
+                return;
+            }
+
+            AuthWithQqPlugin.WebLoginSessionEntry session = plugin.getWebLoginSession(sessionToken);
+            if (session == null) {
+                JsonObject response = new JsonObject();
+                response.addProperty("valid", false);
+                response.addProperty("error", "Invalid or expired session");
+                sendResponse(exchange, 401, gson.toJson(response));
+                return;
+            }
+
+            String playerName = plugin.getDatabaseManager().getNameByUuid(session.uuid);
+            JsonObject response = new JsonObject();
+            response.addProperty("valid", true);
+            response.addProperty("uuid", session.uuid.toString());
+            response.addProperty("name", playerName != null ? playerName : "");
+            response.addProperty("expires_at", session.expiresAt);
+            sendResponse(exchange, 200, gson.toJson(response));
         }
     }
 }

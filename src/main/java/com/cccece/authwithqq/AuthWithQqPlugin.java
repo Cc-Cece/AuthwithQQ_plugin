@@ -6,16 +6,19 @@ import com.cccece.authwithqq.util.CsvManager;
 import com.cccece.authwithqq.web.InternalWebServer;
 import java.io.File;
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.Map;
 import java.util.Objects;
 import java.security.SecureRandom; // Placed after java.util.Objects for CustomImportOrder
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import com.cccece.authwithqq.util.MessageManager;
 import org.bukkit.Bukkit;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import org.mindrot.jbcrypt.BCrypt; // BCrypt for password hashing
 
 /**
  * Main class for the AuthWithQq plugin.
@@ -27,6 +30,29 @@ public class AuthWithQqPlugin extends JavaPlugin {
   private CsvManager csvManager;
   private MessageManager messageManager; // Add this line
   private final SecureRandom random = new SecureRandom();
+  private final long serverStartTime = System.currentTimeMillis(); // Server start timestamp
+
+  // --- Today's Online Statistics (Memory-based) ---
+  private final Map<UUID, Long> todayFirstJoinTime = new ConcurrentHashMap<>(); // UUID -> first join timestamp today
+  private final Map<UUID, Long> todayTotalOnlineTime = new ConcurrentHashMap<>(); // UUID -> total online time in milliseconds
+  private int todayUniquePlayers = 0; // Count of unique players who joined today
+  private long todayResetTime = System.currentTimeMillis(); // When today's stats were reset
+
+  // --- Recent Player Activities (Memory Queue) ---
+  public static class ActivityEntry {
+    public final String playerName;
+    public final String activityType; // "join" or "quit"
+    public final long timestamp;
+
+    public ActivityEntry(String playerName, String activityType, long timestamp) {
+      this.playerName = playerName;
+      this.activityType = activityType;
+      this.timestamp = timestamp;
+    }
+  }
+
+  private final LinkedList<ActivityEntry> recentActivities = new LinkedList<>(); // Recent player activities
+  private static final int MAX_RECENT_ACTIVITIES = 50; // Maximum number of activities to keep
 
   @Override
   public void onEnable() {
@@ -63,6 +89,9 @@ public class AuthWithQqPlugin extends JavaPlugin {
     String token = getConfig().getString("server.token", "changeme");
     webServer = new InternalWebServer(this, port, token);
     getServer().getScheduler().runTaskAsynchronously(this, () -> webServer.start());
+
+    // Schedule daily reset task for today's statistics
+    scheduleDailyReset();
 
     getLogger().info("AuthWithQq has been enabled!");
   }
@@ -347,8 +376,27 @@ public class AuthWithQqPlugin extends JavaPlugin {
   }
 
   /**
+   * Gets the UUID associated with a profile session token without consuming it.
+   * Used for viewing profile data.
+   *
+   * @param token The session token string.
+   * @return The UUID of the player associated with the token, or null if invalid or expired.
+   */
+  public UUID getProfileSessionTokenUuid(String token) {
+    int tokenExpiration = getConfig().getInt("binding.profile-token-expiration", 300); // Default 300 seconds
+    ProfileSessionTokenEntry entry = playerProfileSessionTokens.get(token);
+
+    if (entry != null && (System.currentTimeMillis() - entry.timestamp) < (tokenExpiration * 1000L)) {
+      // Token is valid, but don't remove it (for viewing)
+      return entry.uuid;
+    }
+    return null;
+  }
+
+  /**
    * Validates a profile session token and returns the associated player UUID if valid and not expired.
    * The token is considered single-use and is invalidated after a successful validation.
+   * Use this method when updating profile data to ensure the token is consumed.
    *
    * @param token The session token string.
    * @return The UUID of the player associated with the token, or null if invalid or expired.
@@ -364,5 +412,324 @@ public class AuthWithQqPlugin extends JavaPlugin {
       return entry.uuid;
     }
     return null;
+  }
+
+  // --- Web Login Session Management ---
+  private final Map<String, WebLoginSessionEntry> webLoginSessions = new HashMap<>(); // Token -> Entry
+
+  // Inner class to hold web login session token and its expiration
+  public static class WebLoginSessionEntry {
+    public final UUID uuid;
+    public final String token;
+    public final long createdAt;
+    public final long expiresAt;
+
+    WebLoginSessionEntry(UUID uuid, String token, long createdAt, long expiresAt) {
+      this.uuid = uuid;
+      this.token = token;
+      this.createdAt = createdAt;
+      this.expiresAt = expiresAt;
+    }
+  }
+
+  /**
+   * Creates a new web login session token for a player.
+   *
+   * @param uuid The player's UUID.
+   * @return The generated session token string.
+   */
+  public String createWebLoginSession(UUID uuid) {
+    int sessionExpiration = getConfig().getInt("binding.web-session-expiration", 1440); // Default 1440 minutes (24 hours)
+    String token = UUID.randomUUID().toString();
+    long now = System.currentTimeMillis();
+    long expiresAt = sessionExpiration > 0 ? now + (sessionExpiration * 60L * 1000L) : Long.MAX_VALUE;
+
+    webLoginSessions.put(token, new WebLoginSessionEntry(uuid, token, now, expiresAt));
+
+    // Schedule task to remove token after expiration (if expiration is set)
+    if (sessionExpiration > 0) {
+      getServer().getScheduler().runTaskLater(this, () -> {
+        WebLoginSessionEntry entry = webLoginSessions.get(token);
+        if (entry != null && entry.token.equals(token)) {
+          webLoginSessions.remove(token);
+          getLogger().info("Web login session token for " + uuid + " expired and removed.");
+        }
+      }, sessionExpiration * 60L * 20L); // Convert minutes to ticks
+    }
+
+    return token;
+  }
+
+  /**
+   * Validates a web login session token and returns the associated player UUID if valid and not expired.
+   *
+   * @param token The session token string.
+   * @return The UUID of the player associated with the token, or null if invalid or expired.
+   */
+  public UUID validateWebLoginSessionToken(String token) {
+    if (token == null || token.isEmpty()) {
+      return null;
+    }
+    WebLoginSessionEntry entry = webLoginSessions.get(token);
+    if (entry != null && System.currentTimeMillis() < entry.expiresAt) {
+      return entry.uuid;
+    }
+    // Token expired or not found, remove it
+    if (entry != null) {
+      webLoginSessions.remove(token);
+    }
+    return null;
+  }
+
+  /**
+   * Revokes a web login session token.
+   *
+   * @param token The session token string.
+   */
+  public void revokeWebLoginSession(String token) {
+    webLoginSessions.remove(token);
+  }
+
+  /**
+   * Gets session information for a token.
+   *
+   * @param token The session token string.
+   * @return The session entry, or null if not found or expired.
+   */
+  public WebLoginSessionEntry getWebLoginSession(String token) {
+    WebLoginSessionEntry entry = webLoginSessions.get(token);
+    if (entry != null && System.currentTimeMillis() < entry.expiresAt) {
+      return entry;
+    }
+    if (entry != null) {
+      webLoginSessions.remove(token);
+    }
+    return null;
+  }
+
+  /**
+   * Verifies a password against a stored hash.
+   *
+   * @param password The plain text password.
+   * @param hash The BCrypt hash.
+   * @return true if password matches, false otherwise.
+   */
+  public boolean verifyPassword(String password, String hash) {
+    if (password == null || hash == null) {
+      return false;
+    }
+    try {
+      return BCrypt.checkpw(password, hash);
+    } catch (Exception e) {
+      getLogger().warning("Error verifying password: " + e.getMessage());
+      return false;
+    }
+  }
+
+  /**
+   * Hashes a password using BCrypt.
+   *
+   * @param password The plain text password.
+   * @return The BCrypt hash.
+   */
+  public String hashPassword(String password) {
+    return BCrypt.hashpw(password, BCrypt.gensalt());
+  }
+
+  /**
+   * Gets the server start time in milliseconds.
+   *
+   * @return The server start timestamp.
+   */
+  public long getServerStartTime() {
+    return serverStartTime;
+  }
+
+  /**
+   * Records a player join event for today's statistics and recent activities.
+   *
+   * @param uuid The player's UUID.
+   * @param playerName The player's name.
+   */
+  public void recordPlayerJoin(UUID uuid, String playerName) {
+    long now = System.currentTimeMillis();
+    
+    // Check if we need to reset today's stats (new day)
+    if (now - todayResetTime >= 24 * 60 * 60 * 1000L) {
+      resetTodayStats();
+    }
+    
+    // Record first join time if not already recorded today
+    if (!todayFirstJoinTime.containsKey(uuid)) {
+      todayFirstJoinTime.put(uuid, now);
+      todayUniquePlayers++;
+    }
+    
+    // Add to recent activities
+    addRecentActivity(playerName, "join", now);
+  }
+
+  /**
+   * Records a player quit event for today's statistics and recent activities.
+   *
+   * @param uuid The player's UUID.
+   * @param playerName The player's name.
+   */
+  public void recordPlayerQuit(UUID uuid, String playerName) {
+    long now = System.currentTimeMillis();
+    
+    // Calculate online time for this session
+    Long firstJoinTime = todayFirstJoinTime.get(uuid);
+    if (firstJoinTime != null) {
+      long sessionTime = now - firstJoinTime;
+      todayTotalOnlineTime.merge(uuid, sessionTime, Long::sum);
+      // Remove from first join time map (will be re-added on next join)
+      todayFirstJoinTime.remove(uuid);
+    }
+    
+    // Add to recent activities
+    addRecentActivity(playerName, "quit", now);
+  }
+
+  /**
+   * Adds an activity to the recent activities queue.
+   *
+   * @param playerName The player's name.
+   * @param activityType The type of activity ("join" or "quit").
+   * @param timestamp The timestamp of the activity.
+   */
+  private void addRecentActivity(String playerName, String activityType, long timestamp) {
+    synchronized (recentActivities) {
+      recentActivities.addLast(new ActivityEntry(playerName, activityType, timestamp));
+      // Keep only the most recent activities
+      while (recentActivities.size() > MAX_RECENT_ACTIVITIES) {
+        recentActivities.removeFirst();
+      }
+    }
+  }
+
+  /**
+   * Resets today's statistics (called at midnight or server start if needed).
+   */
+  private void resetTodayStats() {
+    todayFirstJoinTime.clear();
+    todayTotalOnlineTime.clear();
+    todayUniquePlayers = 0;
+    todayResetTime = System.currentTimeMillis();
+  }
+
+  /**
+   * Schedules a daily reset task for today's statistics.
+   */
+  private void scheduleDailyReset() {
+    // Calculate milliseconds until next midnight
+    long now = System.currentTimeMillis();
+    java.util.Calendar cal = java.util.Calendar.getInstance();
+    cal.set(java.util.Calendar.HOUR_OF_DAY, 0);
+    cal.set(java.util.Calendar.MINUTE, 0);
+    cal.set(java.util.Calendar.SECOND, 0);
+    cal.set(java.util.Calendar.MILLISECOND, 0);
+    cal.add(java.util.Calendar.DAY_OF_MONTH, 1);
+    long nextMidnight = cal.getTimeInMillis();
+    long delay = nextMidnight - now;
+    
+    // Schedule task to run at midnight
+    getServer().getScheduler().runTaskLater(this, () -> {
+      resetTodayStats();
+      scheduleDailyReset(); // Schedule next reset
+    }, delay / 50); // Convert to ticks (50ms per tick)
+  }
+
+  /**
+   * Gets today's unique player count.
+   *
+   * @return The number of unique players who joined today.
+   */
+  public int getTodayUniquePlayers() {
+    return todayUniquePlayers;
+  }
+
+  /**
+   * Gets today's total online time in milliseconds.
+   *
+   * @return The total online time in milliseconds.
+   */
+  public long getTodayTotalOnlineTime() {
+    // Calculate current online time for players who are still online
+    long now = System.currentTimeMillis();
+    long currentOnlineTime = 0;
+    for (Map.Entry<UUID, Long> entry : todayFirstJoinTime.entrySet()) {
+      currentOnlineTime += now - entry.getValue();
+    }
+    
+    // Sum all recorded online times
+    long totalRecorded = todayTotalOnlineTime.values().stream().mapToLong(Long::longValue).sum();
+    
+    return totalRecorded + currentOnlineTime;
+  }
+
+  /**
+   * Gets the list of recent player activities.
+   *
+   * @return A copy of the recent activities list.
+   */
+  public LinkedList<ActivityEntry> getRecentActivities() {
+    synchronized (recentActivities) {
+      return new LinkedList<>(recentActivities);
+    }
+  }
+
+  /**
+   * Gets today's online time for each player.
+   * Returns a map of player names to their online time in milliseconds.
+   * This includes both currently online players and players who have quit.
+   *
+   * @return A map of player names to online time in milliseconds.
+   */
+  public Map<String, Long> getTodayPlayerOnlineTimes() {
+    Map<String, Long> result = new HashMap<>();
+    long now = System.currentTimeMillis();
+    
+    // Add online time for currently online players
+    for (Map.Entry<UUID, Long> entry : todayFirstJoinTime.entrySet()) {
+      UUID uuid = entry.getKey();
+      long joinTime = entry.getValue();
+      long onlineTime = now - joinTime;
+      
+      // Get player name
+      String playerName = getDatabaseManager().getNameByUuid(uuid);
+      if (playerName == null) {
+        // Try to get from online players
+        Player player = getServer().getPlayer(uuid);
+        if (player != null) {
+          playerName = player.getName();
+        } else {
+          playerName = uuid.toString(); // Fallback to UUID
+        }
+      }
+      
+      // Add to existing time if player has quit before
+      Long existingTime = todayTotalOnlineTime.get(uuid);
+      if (existingTime != null) {
+        result.put(playerName, existingTime + onlineTime);
+      } else {
+        result.put(playerName, onlineTime);
+      }
+    }
+    
+    // Add online time for players who have quit (not currently online)
+    for (Map.Entry<UUID, Long> entry : todayTotalOnlineTime.entrySet()) {
+      UUID uuid = entry.getKey();
+      if (!todayFirstJoinTime.containsKey(uuid)) {
+        // Player has quit, only use recorded time
+        String playerName = getDatabaseManager().getNameByUuid(uuid);
+        if (playerName == null) {
+          playerName = uuid.toString(); // Fallback to UUID
+        }
+        result.put(playerName, entry.getValue());
+      }
+    }
+    
+    return result;
   }
 }

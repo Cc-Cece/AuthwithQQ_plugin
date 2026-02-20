@@ -45,6 +45,12 @@ public class DatabaseManager {
           + "qq BIGINT DEFAULT 0, "
           + "created_at LONG"
           + ")");
+      // Add web_password_hash column if it doesn't exist
+      try {
+        stmt.execute("ALTER TABLE auth_players ADD COLUMN web_password_hash VARCHAR(255)");
+      } catch (SQLException e) {
+        // Column already exists, ignore
+      }
       // Table for dynamic player metadata
       stmt.execute("CREATE TABLE IF NOT EXISTS player_meta ("
           + "uuid VARCHAR(36), "
@@ -632,6 +638,73 @@ public class DatabaseManager {
       logger.log(Level.SEVERE, "Could not get all bots data", e);
     }
     return bots;
+  }
+
+  /**
+   * Sets the web login password hash for a player.
+   *
+   * @param uuid The player's UUID.
+   * @param passwordHash The BCrypt hash of the password.
+   */
+  public void setWebPasswordHash(UUID uuid, String passwordHash) {
+    String sql = "UPDATE auth_players SET web_password_hash = ? WHERE uuid = ?";
+    try (Connection conn = getConnection();
+         PreparedStatement pstmt = conn.prepareStatement(sql)) {
+      pstmt.setString(1, passwordHash);
+      pstmt.setString(2, uuid.toString());
+      pstmt.executeUpdate();
+    } catch (SQLException e) {
+      logger.log(Level.SEVERE, "Could not set web password hash", e);
+    }
+  }
+
+  /**
+   * Gets the web login password hash for a player.
+   *
+   * @param uuid The player's UUID.
+   * @return The password hash, or null if not set.
+   */
+  public String getWebPasswordHash(UUID uuid) {
+    String sql = "SELECT web_password_hash FROM auth_players WHERE uuid = ?";
+    try (Connection conn = getConnection();
+         PreparedStatement pstmt = conn.prepareStatement(sql)) {
+      pstmt.setString(1, uuid.toString());
+      try (ResultSet rs = pstmt.executeQuery()) {
+        if (rs.next()) {
+          return rs.getString("web_password_hash");
+        }
+      }
+    } catch (SQLException e) {
+      logger.log(Level.SEVERE, "Could not get web password hash", e);
+    }
+    return null;
+  }
+
+  /**
+   * Removes the web login password for a player.
+   *
+   * @param uuid The player's UUID.
+   */
+  public void removeWebPassword(UUID uuid) {
+    String sql = "UPDATE auth_players SET web_password_hash = NULL WHERE uuid = ?";
+    try (Connection conn = getConnection();
+         PreparedStatement pstmt = conn.prepareStatement(sql)) {
+      pstmt.setString(1, uuid.toString());
+      pstmt.executeUpdate();
+    } catch (SQLException e) {
+      logger.log(Level.SEVERE, "Could not remove web password", e);
+    }
+  }
+
+  /**
+   * Checks if a player has a web login password set.
+   *
+   * @param uuid The player's UUID.
+   * @return true if password is set, false otherwise.
+   */
+  public boolean hasWebPassword(UUID uuid) {
+    String hash = getWebPasswordHash(uuid);
+    return hash != null && !hash.isEmpty();
   }
 }
 

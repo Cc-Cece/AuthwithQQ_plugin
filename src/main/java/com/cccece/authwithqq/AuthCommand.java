@@ -239,10 +239,16 @@ public class AuthCommand implements CommandExecutor, TabCompleter {
       // Check bot limit
       final int maxBotsPerPlayer = plugin.getConfig().getInt("binding.max-bots-per-player", 0);
       int currentBotCount = plugin.getDatabaseManager().getBotCountForOwner(ownerUuid);
-      if (maxBotsPerPlayer > 0 && currentBotCount >= maxBotsPerPlayer) {
+      if (maxBotsPerPlayer == 0) {
+        // 0 means bot adding is disabled
+        sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.bot.bot-limit-reached", new HashMap<String, String>() {{ put("%owner%", ownerName); put("%limit%", "0"); }}));
+        return;
+      } else if (maxBotsPerPlayer > 0 && currentBotCount >= maxBotsPerPlayer) {
+        // Positive number means limit check
         sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.bot.bot-limit-reached", new HashMap<String, String>() {{ put("%owner%", ownerName); put("%limit%", String.valueOf(maxBotsPerPlayer)); }}));
         return;
       }
+      // Negative number means unlimited, allow adding
 
       // Generate a UUID for the bot (deterministic based on name for consistency if needed, or random)
       final UUID botUuid = UUID.nameUUIDFromBytes(("Bot-" + botName).getBytes(StandardCharsets.UTF_8));

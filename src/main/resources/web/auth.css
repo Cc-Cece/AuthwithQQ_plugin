@@ -99,6 +99,7 @@ h1 {
 .success-actions .btn,
 .success-actions .btn-secondary {
     min-width: 120px;
+    width: 100%;
 }
 
 /* Mobile optimizations */
