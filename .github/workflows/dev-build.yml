@@ -90,7 +90,7 @@ jobs:
           name: "${{ github.ref == 'refs/heads/main' && format('Latest Dev Build (#{0})', github.run_number) || format('Feature Build: {0} (#{1})', github.ref_name, github.run_number) }}"
           body: |
             ${{ github.ref != 'refs/heads/main' && format('> [!WARNING]\n> 这是 Feature 分支 `{0}` 的测试构建，仅供测试使用。\n\n', github.ref_name) || '' }}
-            ## 🛠 最新构建详情
+            ## 最新构建详情
             - **分支**: `${{ github.ref_name }}`
             - **构建类型**: ${{ github.ref == 'refs/heads/main' && '正式构建' || 'Feature 测试构建' }}
             - **项目名称**: `${{ steps.find_asset.outputs.NAME }}`
@@ -100,7 +100,7 @@ jobs:
             
             ${{ github.ref == 'refs/heads/main' && '> [!TIP]\n> 如果构建通过但有黄色警告，说明代码规范（Checkstyle/SpotBugs）未完全达标。' || '> [!NOTE]\n> 此构建来自 Feature 分支，可能包含未完成的特性，请谨慎使用。' }}
             
-            ## 📦 历史构建
+            ## 历史构建
             > [!INFO]
             > 历史构建保存在 GitHub Actions Artifacts 中。
             > 
