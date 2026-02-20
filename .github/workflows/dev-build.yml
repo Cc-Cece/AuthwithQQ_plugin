@@ -60,11 +60,14 @@ jobs:
             exit 1
           fi
           
-          # 3. 设置输出变量
+          # 3. 处理分支名：将斜杠替换为连字符（artifact 名称不允许斜杠）
+          BRANCH_NAME_SAFE=$(echo "${{ github.ref_name }}" | tr '/' '-')
+          
+          # 4. 设置输出变量
           echo "PATH=$RELEASE_JAR" >> "$GITHUB_OUTPUT"
           echo "NAME=$(basename $RELEASE_JAR)" >> "$GITHUB_OUTPUT"
           echo "BRANCH_TYPE=${{ github.ref == 'refs/heads/main' && 'main' || 'feature' }}" >> "$GITHUB_OUTPUT"
-          echo "BRANCH_NAME=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          echo "BRANCH_NAME=$BRANCH_NAME_SAFE" >> "$GITHUB_OUTPUT"
           echo "Found Asset: $RELEASE_JAR"
 
       - name: Upload Build Artifact
