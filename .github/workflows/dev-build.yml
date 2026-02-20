@@ -84,7 +84,7 @@ jobs:
         with:
           files: ${{ steps.find_asset.outputs.PATH }}
           tag_name: ${{ github.ref == 'refs/heads/main' && 'dev' || format('feature/{0}', github.ref_name) }}
-          name: ${{ github.ref == 'refs/heads/main' && format('Latest Dev Build (#{0})', github.run_number) || format('Feature Build: {0} (#{1})', github.ref_name, github.run_number) }}
+          name: "${{ github.ref == 'refs/heads/main' && format('Latest Dev Build (#{0})', github.run_number) || format('Feature Build: {0} (#{1})', github.ref_name, github.run_number) }}"
           body: |
             ${{ github.ref != 'refs/heads/main' && format('> [!WARNING]\n> 这是 Feature 分支 `{0}` 的测试构建，仅供测试使用。\n\n', github.ref_name) || '' }}
             ## 🛠 最新构建详情

@@ -9,7 +9,9 @@ AuthWithQq是一款多功能的Minecraft服务器插件，旨在提供玩家QQ�
 3. **启动服务器**：启动（或重启）服务器以生成默认配置文件。
 4. **配置插件**：编辑 `plugins/AuthWithQq/config.yml`，设置您的 HTTP 端口、API Token 以及 QQ 绑定逻辑。
 5. **应用配置**：在游戏内执行 `/auth reload` 指令重载配置，无需重启服务器。
-6. **开始绑定**：玩家进入游戏后输入 即可看到提示，使用QQ机器人或访问 Web 页面完成认证。
+6. **开始绑定**：玩家进入游戏后即可看到提示，可以通过以下方式完成认证：
+    *   使用QQ机器人（需配置 OneBot 集成）：在QQ私聊或群聊中输入 `绑定 <验证码>`
+    *   访问 Web 页面：打开游戏内提供的链接完成绑定
 
 ### ⚙️ 兼容性
 
@@ -21,6 +23,7 @@ AuthWithQq是一款多功能的Minecraft服务器插件，旨在提供玩家QQ�
 ## ✨ 主要功能
 
 *   **QQ绑定认证**：玩家需绑定QQ才能进入游戏或解除游客限制。
+*   **OneBot v11 集成**：支持通过QQ机器人进行绑定操作，玩家可直接在QQ私聊或群聊中使用命令完成绑定（需配置 OneBot 客户端）。
 *   **Web认证页面**：提供Web认证页面（可选），支持自定义字段，方便玩家通过浏览器完成绑定。
 *   **实时服务器看板**：简单的Web界面实时监控服务器TPS、内存使用和在线玩家列表。
 *   **轻量化管理员管理台**：Web管理界面，方便管理员查看玩家绑定信息、强制解绑、管理白名单和假人。
@@ -33,6 +36,70 @@ AuthWithQq是一款多功能的Minecraft服务器插件，旨在提供玩家QQ�
 ## ⚙️ 配置 (`config.yml`)
 
 插件的配置、消息提示等全部集中在 `config.yml` 中，高度自定义并可更方便地翻译。
+
+### OneBot v11 配置
+
+插件支持 OneBot v11 WebSocket 反向连接，允许玩家通过QQ机器人进行绑定操作。
+
+#### 启用 OneBot 集成
+
+1. **编辑 `config.yml`**，找到 `onebot` 部分：
+   ```yaml
+   onebot:
+     enabled: true  # 设置为 true 启用
+     ws-port: 8080  # WebSocket 监听端口
+     ws-token: "your-secret-token"  # 访问令牌（可选但推荐）
+     allow-private: true  # 是否允许私聊使用命令
+     allowed-groups: [123456789, 987654321]  # 允许使用命令的群号列表（空列表表示不允许群聊）
+     log-level: 1  # 日志级别：1=仅命令日志，2=全部日志，3=不输出日志
+   ```
+
+2. **配置 OneBot 客户端**（如 NapCat、go-cqhttp、Shamrock）：
+   在 OneBot 客户端配置文件中添加反向 WebSocket 客户端：
+   ```json
+   {
+     "enable": true,
+     "name": "authwithqq",
+     "url": "ws://你的服务器地址:8080/onebot/v11/ws?access_token=your-secret-token",
+     "messagePostFormat": "array",
+     "reportSelfMessage": false
+   }
+   ```
+
+3. **重启服务器和 OneBot 客户端**，确保连接成功。
+
+#### 支持的QQ命令
+
+启用 OneBot 集成后，玩家可以在QQ私聊或群聊中使用以下命令：
+
+*   **`绑定 <验证码>`**：使用游戏内获取的验证码绑定QQ。
+    *   示例：`绑定 123456`
+*   **`/绑定假人 <假人名称>`**：将一个假人绑定到你的账号。
+    *   示例：`/绑定假人 MyBot`
+*   **`/解绑假人 <假人名称>`**：解绑指定的假人。
+    *   示例：`/解绑假人 MyBot`
+*   **`/假人列表`**：查看你绑定的所有假人。
+*   **`/帮助` 或 `/help`**：显示帮助信息。
+*   **`登记 <QQ号> <MC名>`**：群管理员专用命令，直接绑定QQ和MC账号（无需验证码）。
+    *   示例：`登记 123456789 Steve` 或 `登记 @某人 Steve`
+
+#### 配置说明
+
+*   **`ws-port`**：OneBot WebSocket 服务器监听的端口，确保与 OneBot 客户端配置一致。
+*   **`ws-token`**：访问令牌，用于验证 OneBot 客户端身份。如果设置，OneBot 客户端必须在连接URL中传递相同的值。
+*   **`allow-private`**：是否允许玩家通过QQ私聊使用命令。设置为 `false` 则只允许在配置的群聊中使用。
+*   **`allowed-groups`**：允许使用命令的QQ群号列表。空列表 `[]` 表示不允许任何群聊使用命令（但仍允许私聊，如果 `allow-private` 为 `true`）。
+*   **`log-level`**：日志输出级别：
+    *   `1`：仅输出命令执行日志（推荐）
+    *   `2`：输出全部日志（包括连接、消息接收等，用于调试）
+    *   `3`：不输出任何日志（静默模式）
+
+#### 注意事项
+
+*   OneBot WebSocket 服务器使用独立端口，不会影响现有的 HTTP 服务器。
+*   确保防火墙允许 WebSocket 端口（默认 8080）的访问。
+*   建议设置 `ws-token` 以提高安全性。
+*   群组绑定限制功能需要 OneBot 集成才能正常工作（用于检查QQ是否在指定群内）。
 
 ## 🌐 Web界面使用
 
@@ -292,6 +359,31 @@ AuthWithQq是一款多功能的Minecraft服务器插件，旨在提供玩家QQ�
 ```
 
 构建成功后，JAR文件位于 `build/libs/` 目录下。将生成的 `AuthWithQq-X.Y-SNAPSHOT.jar` 放置到您的Minecraft服务器 `plugins` 文件夹中即可。
+
+## 📝 更新日志
+
+### Feature: OneBot v11 集成
+
+本分支新增了 OneBot v11 WebSocket 反向连接功能，允许玩家通过QQ机器人进行绑定操作。
+
+**新增功能：**
+*   OneBot v11 WebSocket 反向连接支持
+*   QQ 私聊/群聊命令支持（绑定、假人管理、帮助等）
+*   群管理员直接绑定功能（`登记` 命令）
+*   可配置的日志输出级别
+*   群组绑定限制功能（需要 OneBot 集成）
+
+**配置变更：**
+*   新增 `onebot` 配置节，包含 OneBot 相关设置
+*   新增 `binding.bot-name-prefix` 配置项，用于验证假人名称前缀
+*   新增 `binding.force-group-binding` 和 `binding.group-binding-groups` 配置项，用于强制群组绑定
+*   消息文本已迁移到 `lang/` 目录下的语言文件中，支持多语言（简体中文、繁体中文、英文）
+
+**技术改进：**
+*   使用独立的 WebSocket 端口，不影响现有 HTTP 服务器
+*   实现了群成员缓存机制，提高群组验证性能
+*   优化了命令解析，支持更灵活的输入格式
+*   添加了假人名称前缀验证功能
 
 ## 🤝 贡献
 
