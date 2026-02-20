@@ -216,7 +216,8 @@ public class GuestListener implements Listener {
     // Construct the web link for binding, including UUID and name for authentication context
     String externalAddress = plugin.getConfig().getString("server.external-address", "127.0.0.1");
     int port = plugin.getConfig().getInt("server.port", 8081);
-    String webLink = String.format("http://%s:%d/web/auth.html?uuid=%s&name=%s&verificationCode=%s", externalAddress, port, uuid.toString(), player.getName(), verificationCode);
+    int codeExpiration = plugin.getConfig().getInt("binding.code-expiration", 300);
+    String webLink = String.format("http://%s:%d/web/auth.html?uuid=%s&name=%s&verificationCode=%s&expire=%d", externalAddress, port, uuid.toString(), player.getName(), verificationCode, codeExpiration);
 
     // Determine how to display verification information based on config
     String displayMethod = plugin.getConfig().getString("guest-mode.verification-display-method", "BOTH").toUpperCase();

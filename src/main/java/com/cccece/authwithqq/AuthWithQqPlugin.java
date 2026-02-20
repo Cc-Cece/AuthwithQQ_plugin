@@ -4,6 +4,7 @@ import com.cccece.authwithqq.database.DatabaseManager;
 import com.cccece.authwithqq.listener.GuestListener;
 import com.cccece.authwithqq.util.CsvManager;
 import com.cccece.authwithqq.web.InternalWebServer;
+import com.cccece.authwithqq.web.OneBotWebSocketServer;
 import java.io.File;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -16,6 +17,8 @@ import com.cccece.authwithqq.util.MessageManager;
 import org.bukkit.Bukkit;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.entity.Player;
+import org.bukkit.configuration.file.FileConfiguration;
+import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
 import org.mindrot.jbcrypt.BCrypt; // BCrypt for password hashing
@@ -24,11 +27,15 @@ import org.mindrot.jbcrypt.BCrypt; // BCrypt for password hashing
  * Main class for the AuthWithQq plugin.
  */
 public class AuthWithQqPlugin extends JavaPlugin {
+  private FileConfiguration messagesConfig;
+  private String currentLocale;
+
   private DatabaseManager databaseManager;
   private InternalWebServer webServer;
   private GuestListener guestListener;
   private CsvManager csvManager;
   private MessageManager messageManager; // Add this line
+  private OneBotWebSocketServer oneBotWebSocketServer;
   private final SecureRandom random = new SecureRandom();
   private final long serverStartTime = System.currentTimeMillis(); // Server start timestamp
 
@@ -58,6 +65,8 @@ public class AuthWithQqPlugin extends JavaPlugin {
   public void onEnable() {
     // Save default config
     saveDefaultConfig();
+    saveDefaultLang();
+    loadMessages();
 
     // Initialize MessageManager
     messageManager = new MessageManager(this); // Add this line
@@ -90,6 +99,16 @@ public class AuthWithQqPlugin extends JavaPlugin {
     webServer = new InternalWebServer(this, port, token);
     getServer().getScheduler().runTaskAsynchronously(this, () -> webServer.start());
 
+    // Start OneBot v11 WebSocket server (independent port)
+    if (getConfig().getBoolean("onebot.enabled", false)) {
+      int wsPort = getConfig().getInt("onebot.ws-port", 8080);
+      String wsToken = getConfig().getString("onebot.ws-token", "");
+      oneBotWebSocketServer = new OneBotWebSocketServer(this, wsPort, "/onebot/v11/ws", wsToken);
+      // Java-WebSocket starts its own thread internally, this call is non-blocking.
+      oneBotWebSocketServer.start();
+      getLogger().info("OneBot v11 WebSocket integration enabled on port " + wsPort);
+    }
+
     // Schedule daily reset task for today's statistics
     scheduleDailyReset();
 
@@ -117,10 +136,79 @@ public class AuthWithQqPlugin extends JavaPlugin {
 
   @Override
   public void onDisable() {
+    if (oneBotWebSocketServer != null) {
+      try {
+        oneBotWebSocketServer.stop();
+      } catch (InterruptedException e) {
+        getLogger().log(java.util.logging.Level.WARNING, "Error while stopping OneBot WebSocket server", e);
+        Thread.currentThread().interrupt();
+      }
+    }
     if (webServer != null) {
       webServer.stop();
     }
     getLogger().info("AuthWithQq has been disabled!");
+  }
+
+  private void loadMessages() {
+    if (currentLocale == null || currentLocale.isEmpty()) {
+      currentLocale = getConfig().getString("lang", "zh_CN");
+    }
+    java.io.File langDir = new java.io.File(getDataFolder(), "lang");
+    if (!langDir.exists()) {
+      langDir.mkdirs();
+    }
+    java.io.File messagesFile = new java.io.File(langDir, currentLocale + ".yml");
+    if (!messagesFile.exists()) {
+      // fallback to zh_CN bundled default
+      saveResource("lang/zh_CN.yml", false);
+      messagesFile = new java.io.File(langDir, "zh_CN.yml");
+    }
+    messagesConfig = YamlConfiguration.loadConfiguration(messagesFile);
+  }
+
+  public FileConfiguration getMessagesConfig() {
+    if (messagesConfig == null) {
+      loadMessages();
+    }
+    return messagesConfig;
+  }
+
+  public String getMessage(String path) {
+    return getMessage(path, null);
+  }
+
+  public String getMessage(String path, java.util.Map<String, String> placeholders) {
+    if (messagesConfig == null) {
+      loadMessages();
+    }
+    String raw = messagesConfig.getString(path);
+    if (raw == null) {
+      // Fallback to path itself to make missing keys显眼
+      raw = path;
+    }
+    if (placeholders != null) {
+      for (java.util.Map.Entry<String, String> entry : placeholders.entrySet()) {
+        raw = raw.replace("{" + entry.getKey() + "}", String.valueOf(entry.getValue()));
+      }
+    }
+    return raw;
+  }
+
+  private void saveDefaultLang() {
+    // Ensure default language files exist
+    java.io.File langDir = new java.io.File(getDataFolder(), "lang");
+    if (!langDir.exists()) {
+      langDir.mkdirs();
+    }
+    // Save all bundled language files if they don't exist
+    String[] locales = {"zh_CN", "zh_TW", "en_US"};
+    for (String locale : locales) {
+      java.io.File langFile = new java.io.File(langDir, locale + ".yml");
+      if (!langFile.exists()) {
+        saveResource("lang/" + locale + ".yml", false);
+      }
+    }
   }
 
   /**

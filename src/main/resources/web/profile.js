@@ -96,8 +96,8 @@ document.addEventListener('DOMContentLoaded', () => {
             // 清空自定义字段容器
             customFieldsContainer.innerHTML = '';
 
-            // 获取自定义字段定义
-            const metaResponse = await fetch('/api/meta');
+            // 获取自定义字段定义（玩家类型）
+            const metaResponse = await fetch('/api/meta?type=player');
             if (!metaResponse.ok) {
                 throw new Error('获取自定义字段定义失败');
             }

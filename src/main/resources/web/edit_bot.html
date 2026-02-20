@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>编辑假人资料</title>
+    <link rel="stylesheet" href="common.css">
+    <link rel="stylesheet" href="components.css">
+    <link rel="stylesheet" href="profile.css">
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <div>
+                    <h1 style="margin: 0;">编辑假人资料</h1>
+                    <p style="margin: 8px 0 0 0;" id="botSubtitle">在此修改假人的自定义信息</p>
+                </div>
+                <a href="player_dashboard.html" id="backBtn" style="padding: 8px 16px; background: var(--secondary-color); color: white; text-decoration: none; border-radius: var(--radius); font-size: 14px; transition: background 0.2s;">返回控制台</a>
+            </div>
+        <form id="botForm">
+            <input type="hidden" id="botUuid" name="botUuid">
+
+            <div class="form-group">
+                <label for="botName">假人名称</label>
+                <input type="text" id="botName" name="botName" readonly>
+            </div>
+
+            <!-- Custom fields will be injected here by JavaScript -->
+            <div id="customFieldsContainer"></div>
+
+            <div id="noFieldsMessage" style="display: none;">
+                <p class="empty-state">暂无可编辑的自定义字段</p>
+            </div>
+
+            <button type="submit" class="btn" id="submitBtn">
+                <span id="submitBtnText">保存修改</span>
+            </button>
+        </form>
+        </div>
+    </div>
+    <script src="components.js"></script>
+    <script src="edit_bot.js"></script>
+</body>
+</html>

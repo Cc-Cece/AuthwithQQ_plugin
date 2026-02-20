@@ -1,0 +1,124 @@
+onebot:
+  prefix: "【AuthWithQq】"
+
+  common:
+    error-command-generic: "⚠️ An error occurred while processing the command. Please try again later."
+
+  bind:
+    invalid-code: "❌ Invalid or expired verification code\n\n💡 Please get a new code in-game"
+    already-bound-same-account: "ℹ️ You have already bound this account\n\n👤 Player: {player}"
+    already-bound-other-qq: "❌ This account is bound to another QQ\n\n💡 Please contact an admin to unbind"
+    max-accounts-reached: "❌ QQ binding limit reached\n\n📊 Current limit: {max} accounts"
+    success: "✅ Binding successful!\n━━━━━━━━━━━━━━━\n👤 Player: {player}\n🆔 UUID: {uuid_short}...\n📱 QQ: {qq}"
+
+  bots:
+    disabled: "🚫 Bot feature is disabled"
+    bind-success: "✅ Bot bound successfully!\n━━━━━━━━━━━━━━━\n🤖 Name: {bot}\n🆔 UUID: {uuid_short}...\n👤 Player: {player}\n📱 QQ: {qq}\n📊 Currently bound: {count} / {max}"
+    unbind-success: "✅ Bot unbound successfully!\n━━━━━━━━━━━━━━━\n🤖 Name: {bot}\n👤 Player: {player}\n📱 QQ: {qq}"
+    list-empty: "📋 Bot List\n━━━━━━━━━━━━━━━\n📭 No bots yet\n\n💡 Use \"/bindbot <name>\" to add a bot"
+    list-header: "📋 Bot List\n━━━━━━━━━━━━━━━"
+    list-line: "{index}. {bot}  (UUID: {uuid_short}...)"
+    list-footer: "━━━━━━━━━━━━━━━\n📊 Currently bound: {count} / {max}"
+    list-error: "⚠️ Error fetching bot list. Please try again later"
+    max-bots-reached: "❌ Bot limit reached\n\n📊 Current: {count} / {max}"
+    bot-not-found: "❌ Bot \"{bot}\" not found\n\n💡 Please check the name"
+    not-your-bot: "❌ Cannot unbind\n\n💡 Bot \"{bot}\" does not belong to you"
+
+  bind-extra:
+    need-bound-first: "❌ You haven't bound your QQ yet\n\n💡 Please use \"bind <code>\" to bind your account first"
+
+  register:
+    no-permission: "❌ Only group admins can use the \"register\" command"
+    usage: "❌ Invalid command format\n\nUsage:\nregister <QQ> <MC name>\nor:\nregister @someone <MC name>"
+    invalid-qq: "❌ Invalid QQ format\n\nUsage:\nregister <QQ> <MC name>\nor:\nregister @someone <MC name>"
+    target-qq-not-found: "❌ Invalid command format, target QQ not found\n\nUsage:\nregister <QQ> <MC name>\nor:\nregister @someone <MC name>"
+    player-not-found: "❌ Player \"{player}\" not found"
+    qq-max-accounts-reached: "❌ QQ binding limit reached\n\n📊 Current limit: {max} accounts"
+    qq-already-bound-other: "❌ QQ {qq} is already bound to another player: {player}"
+    success: "✅ Registration successful!\n━━━━━━━━━━━━━━━\n👤 Player: {player}\n🆔 UUID: {uuid_short}...\n📱 QQ: {qq}"
+    error-generic: "⚠️ An error occurred while processing the register command. Please try again later"
+
+  help:
+    header: "📖 Available Commands:\n━━━━━━━━━━━━━━━"
+    lines:
+      - "🔗 bind <code>\n   └ Bind MC account using verification code"
+      - "🤖 /bindbot <name>\n   └ Bind a bot to your account"
+      - "🗑️ /unbindbot <name>\n   └ Unbind a bot"
+      - "📋 /botlist\n   └ View your bound bots"
+      - "❓ /help\n   └ Show this help message"
+
+messages:
+  auth:
+    no-permission: "&cYou do not have permission to use this command."
+    reload-success: "&aConfiguration reloaded successfully."
+
+    help:
+      header: "&6--- AuthWithQq Admin Commands ---"
+      reload: "&b/auth reload &7- Reload plugin configuration."
+      csv: "&b/auth csv <export|import> &7- Export/import player data."
+      whitelist: "&b/auth whitelist <add|remove> <player> &7- Manage whitelisted players."
+      bind: "&b/auth bind <player> <qq> &7- Force bind player to QQ."
+      bot-add: "&b/auth bot add <owner> <bot_name> &7- Bind bot to player."
+      bot-unbind: "&b/auth bot unbind <bot_name> &7- Unbind a bot."
+      unbind: "&b/auth unbind <player> &7- Unbind player's QQ."
+
+    command-usage:
+      csv: "&cUsage: /auth csv <export|import>"
+      whitelist: "&cUsage: /auth whitelist <add|remove> <player>"
+      bind: "&cUsage: /auth bind <player> <qq>"
+
+    csv:
+      export-success: "&aPlayer data has been exported to file: &f%file%"
+      export-fail: "&cFailed to export player data: &f%error%"
+      import-file-not-found: "&cImport file import.csv not found."
+      import-success: "&aSuccessfully imported player data from file: &f%file%"
+      import-fail: "&cFailed to import player data: &f%error%"
+
+    whitelist:
+      add-success: "&aAdded player &f%player% &ato whitelist."
+      already-whitelisted: "&ePlayer &f%player% &eis already whitelisted."
+      remove-success: "&aRemoved player &f%player% &afrom whitelist."
+      not-whitelisted: "&cPlayer &f%player% &cis not in whitelist."
+
+    bind:
+      player-not-found: "&cPlayer not found: &f%player%"
+      invalid-qq: "&cInvalid QQ number: &f%qq%"
+      force-bind-success: "&aForce bound: &f%player% &7(UUID: %uuid%) &a⇔ QQ: &f%qq%"
+
+    bot:
+      owner-not-found: "&cOwner player not found: &f%owner%"
+      owner-qq-not-bound: "&cPlayer &f%owner% &chas not bound a QQ yet. Cannot add bot."
+      bot-limit-reached: "&cPlayer &f%owner% &chas reached their bot limit (&f%limit%&c)."
+      add-success: "&aBot &f%bot_name% &ahas been bound to player &f%owner_name% &7(UUID: %owner_uuid%), bot UUID: &f%bot_uuid%"
+      remove-not-owned: "&cBot &f%bot_name% &cdoes not exist or is not owned by any player."
+      remove-success: "&aBot &f%bot_name% &ahas been removed."
+
+    unbind:
+      usage: "&cUsage: /auth unbind <player>"
+      player-not-found: "&cPlayer not found: &f%player%"
+      success: "&aSuccessfully unbound QQ for player &f%player%&a."
+
+  bind-command:
+    player-only: "&cThis command is for players only."
+    usage: "&cUsage: /bind getcode | profile"
+    invalid-qq: "&cInvalid QQ number: %qq%."
+    already-bound-to-this-qq: "&eYou are already bound to this QQ number."
+    already-bound-to-other-qq: "&cYou are already bound to another QQ number. Please contact an admin to unbind."
+    invalid-or-expired-code: "&cInvalid or expired verification code. Please rejoin the game to get a new one."
+    bind-limit-reached: "&cThis QQ number has reached its binding limit."
+    not-bound: "&cPlayer %player% hasn't bound QQ yet. Please bind first!"
+    profile-link-prefix: "&aClick here to edit your profile: "
+    web-bind-only: "&cFor security reasons, player binding is now only available via web. Please use /bind getcode to get a link."
+    bot:
+      owner-not-bound: "&cYou haven't bound your QQ yet. Please bind your QQ first!"
+      limit-reached: "&cYou have reached your bot binding limit (%limit%)."
+      add-success: "&aBot %bot_name% has been successfully bound to your account."
+      remove-not-owned: "&cBot %bot_name% is not yours or does not exist."
+      remove-success: "&aBot %bot_name% has been successfully unbound."
+
+  guest:
+    join-prompt: "&6Please bind your QQ. Verification code: %code%. Visit %web_link% to bind."
+    welcome: "&aWelcome back, %player%!"
+    world-change-denied: "&cYou cannot leave this world without verification!"
+    actionbar-prompt: "&6Please enter /bind <code> <QQ> to complete binding."
+    binding-successful: "&aBinding successful!"

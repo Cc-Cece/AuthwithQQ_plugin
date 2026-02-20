@@ -70,6 +70,13 @@ public class DatabaseManager {
       // Ensure indexes on auth_players
       stmt.execute("CREATE INDEX IF NOT EXISTS idx_auth_players_name ON auth_players(name)");
       stmt.execute("CREATE INDEX IF NOT EXISTS idx_auth_players_qq ON auth_players(qq)");
+      // Table for QQ group members (for force-group-binding feature)
+      stmt.execute("CREATE TABLE IF NOT EXISTS group_members ("
+          + "group_id BIGINT NOT NULL, "
+          + "qq BIGINT NOT NULL, "
+          + "PRIMARY KEY(group_id, qq)"
+          + ")");
+      stmt.execute("CREATE INDEX IF NOT EXISTS idx_group_members_qq ON group_members(qq)");
     } catch (SQLException e) {
       logger.log(Level.SEVERE, "Could not initialize database", e);
     }
@@ -77,6 +84,117 @@ public class DatabaseManager {
 
   private Connection getConnection() throws SQLException {
     return DriverManager.getConnection(url);
+  }
+
+  // ------------------------ QQ Group Members (force-group-binding) ------------------------
+
+  /**
+   * Replaces all members of a specific group with the given list.
+   *
+   * @param groupId The QQ group ID.
+   * @param members A list of QQ numbers that are currently members of the group.
+   */
+  public void replaceGroupMembers(long groupId, List<Long> members) {
+    String deleteSql = "DELETE FROM group_members WHERE group_id = ?";
+    String insertSql = "INSERT OR IGNORE INTO group_members (group_id, qq) VALUES (?, ?)";
+    try (Connection conn = getConnection()) {
+      conn.setAutoCommit(false);
+      try (PreparedStatement deleteStmt = conn.prepareStatement(deleteSql);
+           PreparedStatement insertStmt = conn.prepareStatement(insertSql)) {
+        // Delete existing
+        deleteStmt.setLong(1, groupId);
+        deleteStmt.executeUpdate();
+
+        // Insert new members
+        if (members != null) {
+          for (Long qq : members) {
+            insertStmt.setLong(1, groupId);
+            insertStmt.setLong(2, qq);
+            insertStmt.addBatch();
+          }
+          insertStmt.executeBatch();
+        }
+        conn.commit();
+      } catch (SQLException e) {
+        conn.rollback();
+        throw e;
+      } finally {
+        conn.setAutoCommit(true);
+      }
+    } catch (SQLException e) {
+      logger.log(Level.SEVERE, "Could not replace group members for group " + groupId, e);
+    }
+  }
+
+  /**
+   * Adds or updates a single group member record.
+   *
+   * @param groupId The QQ group ID.
+   * @param qq The QQ number.
+   */
+  public void upsertGroupMember(long groupId, long qq) {
+    String sql = "INSERT OR IGNORE INTO group_members (group_id, qq) VALUES (?, ?)";
+    try (Connection conn = getConnection();
+         PreparedStatement pstmt = conn.prepareStatement(sql)) {
+      pstmt.setLong(1, groupId);
+      pstmt.setLong(2, qq);
+      pstmt.executeUpdate();
+    } catch (SQLException e) {
+      logger.log(Level.SEVERE, "Could not upsert group member", e);
+    }
+  }
+
+  /**
+   * Removes a single group member record.
+   *
+   * @param groupId The QQ group ID.
+   * @param qq The QQ number.
+   */
+  public void removeGroupMember(long groupId, long qq) {
+    String sql = "DELETE FROM group_members WHERE group_id = ? AND qq = ?";
+    try (Connection conn = getConnection();
+         PreparedStatement pstmt = conn.prepareStatement(sql)) {
+      pstmt.setLong(1, groupId);
+      pstmt.setLong(2, qq);
+      pstmt.executeUpdate();
+    } catch (SQLException e) {
+      logger.log(Level.SEVERE, "Could not remove group member", e);
+    }
+  }
+
+  /**
+   * Checks if a QQ number is in any of the specified groups.
+   *
+   * @param qq The QQ number to check.
+   * @param groupIds A list of allowed group IDs.
+   * @return true if qq is found in any of the groups, false otherwise.
+   */
+  public boolean isQqInGroups(long qq, List<Long> groupIds) {
+    if (groupIds == null || groupIds.isEmpty()) {
+      return false;
+    }
+    StringBuilder sql = new StringBuilder("SELECT 1 FROM group_members WHERE qq = ? AND group_id IN (");
+    for (int i = 0; i < groupIds.size(); i++) {
+      if (i > 0) {
+        sql.append(",");
+      }
+      sql.append("?");
+    }
+    sql.append(") LIMIT 1");
+
+    try (Connection conn = getConnection();
+         PreparedStatement pstmt = conn.prepareStatement(sql.toString())) {
+      pstmt.setLong(1, qq);
+      for (int i = 0; i < groupIds.size(); i++) {
+        pstmt.setLong(i + 2, groupIds.get(i));
+      }
+      try (ResultSet rs = pstmt.executeQuery()) {
+        return rs.next();
+      }
+    } catch (SQLException e) {
+      logger.log(Level.SEVERE, "Could not check QQ in groups", e);
+    }
+    return false;
   }
 
   /**

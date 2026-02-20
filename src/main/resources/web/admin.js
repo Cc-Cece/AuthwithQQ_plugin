@@ -315,7 +315,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         if (!confirmed) return;
         
-        Loading.button(queryResultDiv.querySelector(`[data-uuid="${uuid}"]`), true);
+        // 在不同视图中查找对应按钮（搜索结果卡片或表格）
+        const btn = document.querySelector(`[data-uuid="${uuid}"]`);
+        if (btn) {
+            Loading.button(btn, true);
+        }
         
         try {
             const response = await fetch('/api/unbind', {
@@ -331,13 +335,25 @@ document.addEventListener('DOMContentLoaded', async () => {
             
             if (response.ok && data.success) {
                 Toast.success('玩家解绑成功');
-                queryResultDiv.innerHTML = '';
-                // 重新执行查询
-                const keyword = queryKeywordInput.value.trim();
-                const by = queryBySelect.value;
-                const target = queryTargetSelect.value;
-                if (keyword) {
-                    await performQuery(keyword, by, target);
+                // 清空查询结果区域
+                if (queryResultDiv) {
+                    queryResultDiv.innerHTML = '';
+                }
+                // 重新执行上方的单次查询（如果有）
+                if (typeof performQuery === 'function' && queryKeywordInput && queryBySelect && queryTargetSelect) {
+                    const keyword = queryKeywordInput.value.trim();
+                    const by = queryBySelect.value;
+                    const target = queryTargetSelect.value;
+                    if (keyword) {
+                        await performQuery(keyword, by, target);
+                    }
+                }
+                // 刷新下方玩家/假人表格数据
+                if (typeof loadPlayersData === 'function') {
+                    await loadPlayersData();
+                }
+                if (typeof loadBotsData === 'function') {
+                    await loadBotsData();
                 }
             } else {
                 throw new Error(data.error || '未知错误');

@@ -362,6 +362,7 @@
                             <li class="bot-item">
                                 <span class="bot-name">${bot.bot_name}</span>
                                 <div class="bot-actions">
+                                    <button class="btn btn-small" onclick="editBot('${bot.bot_uuid}', '${bot.bot_name}')">编辑</button>
                                     <button class="btn btn-small btn-secondary" onclick="deleteBot('${bot.bot_uuid}', '${bot.bot_name}')">删除</button>
                                 </div>
                             </li>
@@ -467,6 +468,11 @@
                 } finally {
                     Loading.hide(loading);
                 }
+            };
+
+            // Edit bot
+            window.editBot = function(botUuid, botName) {
+                window.location.href = `edit_bot.html?bot_uuid=${botUuid}`;
             };
 
             // Logout

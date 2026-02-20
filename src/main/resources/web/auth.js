@@ -21,9 +21,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const uuid = urlParams.get('uuid');
     const name = urlParams.get('name');
     const verificationCode = urlParams.get('verificationCode');
-
-    // 验证码过期时间（默认5分钟）
-    const CODE_EXPIRATION = 300; // 秒
+    
+    // 验证码过期时间：优先从 URL 读取，否则使用默认 300 秒
+    const expireParam = urlParams.get('expire');
+    const CODE_EXPIRATION = expireParam ? parseInt(expireParam, 10) : 300; // 秒
     let codeExpirationTime = null;
     let countdownInterval = null;
 
@@ -128,9 +129,9 @@ document.addEventListener('DOMContentLoaded', () => {
         validateQQ(e.target.value);
     });
 
-    // 获取自定义字段
+    // 获取自定义字段（玩家类型）
     const loadingOverlay = Loading.show('加载表单字段...');
-    fetch('/api/meta')
+    fetch('/api/meta?type=player')
         .then(response => {
             if (!response.ok) {
                 throw new Error('获取自定义字段失败');

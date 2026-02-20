@@ -72,6 +72,8 @@ public class InternalWebServer {
       server.createContext("/api/user/bots", new UserBotsHandler());
       server.createContext("/api/user/bot/bind", new UserBotBindHandler());
       server.createContext("/api/user/bot/unbind", new UserBotUnbindHandler());
+      server.createContext("/api/user/bot/update", new UserBotUpdateHandler()); // Bot owner update bot profile
+      server.createContext("/api/user/bot/profile", new UserBotProfileHandler()); // Bot owner get bot profile
       server.createContext("/api/bots", new AllBotsHandler()); // New: Get all bots
       server.createContext("/api/csv/export", new CsvExportHandler()); // New: Export CSV
       server.createContext("/api/csv/import", new CsvImportHandler()); // New: Import CSV
@@ -334,11 +336,48 @@ public class InternalWebServer {
         long existingQqForUuid = plugin.getDatabaseManager().getQq(uuid);
 
         if (existingQqForUuid == 0 || existingQqForUuid != qq) { // If not bound or changing QQ
-            int currentAccountCount = plugin.getDatabaseManager().getAccountCountByQq(qq);
-            if (currentAccountCount >= maxAccountsPerQq) {
-                sendResponse(exchange, 400, "{\"success\":false, \"error\":\"此QQ号码已达到绑定上限\"}");
-                return;
+          int currentAccountCount = plugin.getDatabaseManager().getAccountCountByQq(qq);
+          if (currentAccountCount >= maxAccountsPerQq) {
+            sendResponse(exchange, 400, "{\"success\":false, \"error\":\"此QQ号码已达到绑定上限\"}");
+            return;
+          }
+        }
+
+        // --- NEW: Disallow web bind if QQ already has any account bound ---
+        boolean disallowWebBindIfQqExists =
+            plugin.getConfig().getBoolean("binding.disallow-web-bind-if-qq-exists", true);
+        if (disallowWebBindIfQqExists) {
+          int currentAccountCountForQq = plugin.getDatabaseManager().getAccountCountByQq(qq);
+          if (currentAccountCountForQq > 0 && existingQqForUuid != qq) {
+            sendResponse(exchange, 400,
+                "{\"success\":false, \"error\":\"该QQ已绑定过账号，请在QQ群内使用机器人指令进行绑定/换绑\"}");
+            return;
+          }
+        }
+        // --- END NEW LOGIC ---
+
+        // --- NEW: Force group binding check (QQ must be in allowed groups) ---
+        boolean forceGroupBinding =
+            plugin.getConfig().getBoolean("binding.force-group-binding", false);
+        if (forceGroupBinding) {
+          // Determine which groups to check
+          java.util.List<Long> groups =
+              plugin.getConfig().getLongList("binding.group-binding-groups");
+          if (groups == null || groups.isEmpty()) {
+            groups = plugin.getConfig().getLongList("onebot.allowed-groups");
+          }
+
+          if (groups == null || groups.isEmpty()) {
+            plugin.getLogger().warning(
+                "[OneBot-WS] force-group-binding is enabled but no groups configured; skipping group check");
+          } else {
+            boolean inGroups = plugin.getDatabaseManager().isQqInGroups(qq, groups);
+            if (!inGroups) {
+              sendResponse(exchange, 400,
+                  "{\"success\":false, \"error\":\"该QQ尚未在指定QQ群中，无法通过网页完成绑定，请先加入QQ群并在群内与机器人交互\"}");
+              return;
             }
+          }
         }
         // --- END NEW LOGIC ---
 
@@ -493,22 +532,31 @@ public class InternalWebServer {
       
       List<Map<?, ?>> customFields = new java.util.ArrayList<>();
       
-      // Check if new format (classified) exists
-      if (plugin.getConfig().isConfigurationSection("binding.custom-fields.player") ||
-          plugin.getConfig().isConfigurationSection("binding.custom-fields.bot")) {
-        // New format: classified fields
-        if ("player".equals(type)) {
-          customFields = plugin.getConfig().getMapList("binding.custom-fields.player");
-        } else if ("bot".equals(type)) {
-          customFields = plugin.getConfig().getMapList("binding.custom-fields.bot");
-        } else {
-          // No type specified or type is invalid, return empty array
-          // Frontend should specify type explicitly
-          customFields = new java.util.ArrayList<>();
+      // Try new format (classified fields) first
+      if ("player".equals(type)) {
+        // Use getMapList which handles List<Map> directly
+        List<Map<?, ?>> playerFields = plugin.getConfig().getMapList("binding.custom-fields.player");
+        if (playerFields != null && !playerFields.isEmpty()) {
+          customFields = playerFields;
+        }
+      } else if ("bot".equals(type)) {
+        // Use getMapList which handles List<Map> directly
+        List<Map<?, ?>> botFields = plugin.getConfig().getMapList("binding.custom-fields.bot");
+        if (botFields != null && !botFields.isEmpty()) {
+          customFields = botFields;
         }
       } else {
-        // Old format: flat list (backward compatibility)
-        customFields = plugin.getConfig().getMapList("binding.custom-fields");
+        // No type specified or type is invalid, return empty array
+        // Frontend should specify type explicitly
+        customFields = new java.util.ArrayList<>();
+      }
+      
+      // Fallback to old format if new format returned empty and no type was specified
+      if (customFields.isEmpty() && type == null) {
+        List<Map<?, ?>> oldFields = plugin.getConfig().getMapList("binding.custom-fields");
+        if (oldFields != null && !oldFields.isEmpty()) {
+          customFields = oldFields;
+        }
       }
       
       com.google.gson.JsonArray jsonArray = new com.google.gson.JsonArray();
@@ -1300,6 +1348,117 @@ public class InternalWebServer {
 
             } catch (Exception e) {
                 plugin.getLogger().log(Level.SEVERE, "Error in UserBotUnbindHandler", e);
+                sendResponse(exchange, 500, "{\"success\":false, \"error\":\"Internal server error\"}");
+            }
+        }
+    }
+
+    // New: Handler for bot owner to get bot profile
+    private class UserBotProfileHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            UUID ownerUuid = getPlayerUuidFromRequest(exchange);
+            if (ownerUuid == null) {
+                sendResponse(exchange, 401, "{\"success\":false, \"error\":\"Unauthorized\"}");
+                return;
+            }
+
+            Map<String, String> query = AuthWithQqPlugin.parseQuery(exchange.getRequestURI().getQuery());
+            String botUuidStr = query != null ? query.get("bot_uuid") : null;
+
+            if (botUuidStr == null || botUuidStr.isEmpty()) {
+                sendResponse(exchange, 400, "{\"success\":false, \"error\":\"Missing bot_uuid parameter\"}");
+                return;
+            }
+
+            try {
+                UUID botUuid = UUID.fromString(botUuidStr);
+                UUID actualOwner = plugin.getDatabaseManager().getBotOwner(botUuid);
+
+                if (actualOwner == null || !actualOwner.equals(ownerUuid)) {
+                    sendResponse(exchange, 403, "{\"success\":false, \"error\":\"You do not own this bot\"}");
+                    return;
+                }
+
+                // Get bot data
+                String botName = plugin.getDatabaseManager().getNameByUuid(botUuid);
+                Map<String, String> meta = plugin.getDatabaseManager().getAllMeta(botUuid);
+
+                JsonObject response = new JsonObject();
+                response.addProperty("uuid", botUuid.toString());
+                response.addProperty("name", botName);
+                response.addProperty("owner_uuid", ownerUuid.toString());
+                
+                JsonObject metaJson = new JsonObject();
+                meta.forEach(metaJson::addProperty);
+                response.add("meta", metaJson);
+
+                sendResponse(exchange, 200, gson.toJson(response));
+
+            } catch (IllegalArgumentException e) {
+                sendResponse(exchange, 400, "{\"success\":false, \"error\":\"Invalid bot_uuid format\"}");
+            } catch (Exception e) {
+                plugin.getLogger().log(Level.SEVERE, "Error in UserBotProfileHandler", e);
+                sendResponse(exchange, 500, "{\"success\":false, \"error\":\"Internal server error\"}");
+            }
+        }
+    }
+
+    // New: Handler for bot owner to update bot profile
+    private class UserBotUpdateHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+                sendResponse(exchange, 405, "Method not allowed");
+                return;
+            }
+
+            UUID ownerUuid = getPlayerUuidFromRequest(exchange);
+            if (ownerUuid == null) {
+                sendResponse(exchange, 401, "{\"success\":false, \"error\":\"Unauthorized\"}");
+                return;
+            }
+
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(exchange.getRequestBody(), StandardCharsets.UTF_8))) {
+                JsonObject body = gson.fromJson(reader, JsonObject.class);
+                String botUuidStr = body.has("bot_uuid") ? body.get("bot_uuid").getAsString() : null;
+
+                if (botUuidStr == null || botUuidStr.isEmpty()) {
+                    sendResponse(exchange, 400, "{\"success\":false, \"error\":\"Missing bot_uuid\"}");
+                    return;
+                }
+
+                UUID botUuid = UUID.fromString(botUuidStr);
+                UUID actualOwner = plugin.getDatabaseManager().getBotOwner(botUuid);
+
+                if (actualOwner == null || !actualOwner.equals(ownerUuid)) {
+                    sendResponse(exchange, 403, "{\"success\":false, \"error\":\"You do not own this bot\"}");
+                    return;
+                }
+
+                JsonObject meta = body.has("meta") ? body.getAsJsonObject("meta") : new JsonObject();
+
+                // Update custom meta fields (bot owners cannot change bot name or owner)
+                for (Map.Entry<String, com.google.gson.JsonElement> entry : meta.entrySet()) {
+                    String key = entry.getKey();
+                    // Skip system fields that bot owners should not modify
+                    if (key.startsWith("bot.")) {
+                        continue;
+                    }
+                    // Remove meta field if value is null or empty string
+                    if (entry.getValue().isJsonNull() || (entry.getValue().isJsonPrimitive() && entry.getValue().getAsString().isEmpty())) {
+                        plugin.getDatabaseManager().deleteMeta(botUuid, key);
+                    } else {
+                        plugin.getDatabaseManager().setMeta(botUuid, key, entry.getValue().getAsString());
+                    }
+                }
+
+                sendResponse(exchange, 200, "{\"success\":true, \"message\":\"Bot profile updated successfully\"}");
+
+            } catch (IllegalArgumentException e) {
+                sendResponse(exchange, 400, "{\"success\":false, \"error\":\"Invalid bot_uuid format\"}");
+            } catch (Exception e) {
+                plugin.getLogger().log(Level.SEVERE, "Error in UserBotUpdateHandler", e);
                 sendResponse(exchange, 500, "{\"success\":false, \"error\":\"Internal server error\"}");
             }
         }

@@ -28,6 +28,13 @@ binding:
   web-login-enabled: true # 布尔值，默认 true。是否启用网页登录功能。
   web-password-min-length: 6 # 整数，默认 6。网页登录密码最小长度。
   web-session-expiration: 1440 # 整数，单位分钟，默认 1440 (24小时)。网页登录会话过期时间，0 表示不过期。
+  force-group-binding: false # 布尔值，默认 false。是否强制要求 QQ 必须在指定QQ群内才能通过网页完成绑定。
+  # 若为 true，则在网页绑定时会检查 QQ 是否在下方配置的QQ群成员列表中（通过 OneBot 缓存的群成员数据判断）。
+  # 具体群列表来源：
+  # - 若 group-binding-groups 非空，则使用该列表
+  # - 否则复用 onebot.allowed-groups
+  group-binding-groups: [] # 长整数列表，群号。用于“强制入群”检查的群列表，留空则使用 onebot.allowed-groups。
+  disallow-web-bind-if-qq-exists: true # 布尔值，默认 true。若为 true，当 QQ 已绑定任意账号时，禁止通过网页再次绑定。
 
 whitelist:
   players: [] # 字符串列表，玩家ID。列表中的玩家无需绑定即可进入游戏。
@@ -37,6 +44,31 @@ server:
   port: 8081 # 整数，默认 8081。服务器监听端口。如果使用了端口转发等工具，建议把该值和远程端口保持一致，避免构造出错误的访问链接。
   token: "changeme" # 字符串，默认 "changeme"。服务器验证令牌，请务必修改为一个安全的随机字符串。
   external-address: "127.0.0.1" # 用于玩家通过网页绑定时的外部访问地址。例如：example.com 或 123.45.67.89。如果留空或不配置，默认使用127.0.0.1。仅用于构造访问链接，不影响服务器实际监听的地址。
+  lang: "zh_CN" # 语言代码，默认 zh_CN。用于从 lang/<lang>.yml 加载文本消息。
+
+onebot:
+  enabled: false # 布尔值，默认 false。是否启用 OneBot v11 WebSocket 反向连接功能。
+  # OneBot v11 WebSocket 反向连接说明：
+  # 1. 在 OneBot 客户端（如 NapCat、go-cqhttp、Shamrock）中配置一个 websocketClients：
+  #    {
+  #      "enable": true,
+  #      "name": "authwithqq",
+  #      "url": "ws://你的服务器地址:8080/onebot/v11/ws?access_token=你的token",
+  #      "messagePostFormat": "array",
+  #      "reportSelfMessage": false
+  #    }
+  # 2. 确保下面的 ws-port、ws-token 与 OneBot 客户端配置保持一致。
+  # 3. 目前仅实现以下命令：
+  #      - "绑定 <验证码>"
+  #      - "/绑定假人 <假人名称>"
+  #      - "/解绑假人 <假人名称>"
+  #      - "/假人列表"
+  #      - "/帮助" 或 "/help"
+  ws-port: 8080 # 整数，默认 8080。OneBot WebSocket 监听端口。
+  ws-token: "" # 字符串，默认空。访问令牌。如果设置，OneBot 客户端必须在 URL 中通过 access_token 传递相同的值。
+  allow-private: true # 布尔值，默认 true。是否允许私聊使用命令。
+  allowed-groups: [] # 长整数列表，群号。允许使用命令的群聊列表。空列表表示不允许群聊使用命令。例如：[123456789, 987654321]
+  log-level: 1 # 整数，默认 1。日志输出级别：1=仅命令执行日志，2=全部日志（含连接、消息等），3=不输出日志
 
 guest-mode:
   allow-move: true # 布尔值，默认 true。如果为 false，则给予玩家 SLOW (等级 255) 和 JUMP (等级 128) 药水效果以禁止移动和跳跃。
@@ -53,70 +85,5 @@ guest-mode:
   verification-display-method: "BOTH" # 字符串，可选值："CODE_ONLY" (只发送验证码), "WEB_ONLY" (只发送网页链接), "BOTH" (两者都发送)。
 
 messages:
-  # AuthCommand Messages
-  auth:
-    no-permission: "&c你没有权限执行此命令。"
-    reload-success: "&a配置已重载。"
-    command-usage:
-      csv: "&c用法: /auth csv <export|import>"
-      whitelist: "&c用法: /auth whitelist <add|remove> <player>"
-      bind: "&c用法: /auth bind <player> <qq>"
-      bot-add: "&c用法: /auth bot add <owner_name> <bot_name>"
-    csv:
-      export-success: "&a数据已导出到 %file%。"
-      export-fail: "&c导出失败: %error%"
-      import-file-not-found: "&c文件 import.csv 未在插件文件夹中找到！"
-      import-success: "&a数据已从 %file% 导入。"
-      import-fail: "&c导入失败: %error%"
-    whitelist:
-      add-success: "&a玩家 %player% 已添加到白名单。"
-      already-whitelisted: "&e玩家 %player% 已经在白名单中。"
-      remove-success: "&a玩家 %player% 已从白名单移除。"
-      not-whitelisted: "&e玩家 %player% 不在白名单中。"
-    bind:
-      player-not-found: "&c找不到玩家 %player%."
-      invalid-qq: "&c无效的QQ号码: %qq%."
-      force-bind-success: "&a已强制绑定玩家 %player% (%uuid%) 到 QQ %qq%."
-    bot:
-      owner-not-found: "&c找不到所有者玩家 %owner%."
-      owner-qq-not-bound: "&c所有者 %owner% 未绑定QQ，无法绑定假人。"
-      bot-limit-reached: "&c所有者 %owner% 已达到假人绑定上限 (%limit%)。"
-      add-success: "&a已绑定假人 %bot_name% (%bot_uuid%) 到所有者 %owner_name% (%owner_uuid%)。"
-    unbind:
-      usage: "&c用法: /auth unbind <player>"
-      player-not-found: "&c找不到玩家 %player%。"
-      success: "&a已解除玩家 %player% 的QQ绑定。"
-    help:
-      header: "&6--- AuthWithQq Admin Commands ---"
-      reload: "&b/auth reload - 重载插件配置。"
-      csv: "&b/auth csv <export|import> - 导出/导入玩家数据。"
-      whitelist: "&b/auth whitelist <add|remove> <player> - 管理白名单玩家。"
-      bind: "&b/auth bind <player> <qq> - 强制绑定玩家QQ。"
-      bot-add: "&b/auth bot add <owner> <bot_name> - 绑定假人到玩家。"
-      unbind: "&b/auth unbind <player> - 解除玩家QQ绑定。"
-  # BindCommand Messages
-  bind-command:
-    player-only: "&cThis command is for players only."
-    usage: "&c用法: /bind getcode | profile"
-    invalid-qq: "&c无效的QQ号码: %qq%."
-    already-bound-to-this-qq: "&e你已经绑定到此QQ号码了。"
-    already-bound-to-other-qq: "&c你已经绑定到其他QQ号码了，如需解绑请联系管理员。"
-    invalid-or-expired-code: "&c验证码无效或已过期，请尝试重新加入游戏获取。"
-    bind-limit-reached: "&c此QQ号码已达到绑定上限。"
-    not-bound: "&c玩家 %player% 尚未绑定QQ，无法修改资料。请先绑定！"
-    profile-link-prefix: "&a点击此处修改您的绑定资料: "
-    web-bind-only: "&c由于安全原因，玩家绑定功能现在只能通过网页进行。请使用 /bind getcode 获取链接。"
-    bot: # Player bot commands
-      owner-not-bound: "&c你尚未绑定QQ，无法添加假人。请先绑定你的QQ！"
-      limit-reached: "&c你已达到假人绑定上限 (%limit%)。"
-      add-success: "&a假人 %bot_name% 已成功绑定到你的账号。"
-      remove-not-owned: "&c假人 %bot_name% 不是你的，或者不存在。"
-      remove-success: "&a假人 %bot_name% 已成功解除绑定。"
-
-  # GuestListener Messages
-  guest:
-    join-prompt: "&6请绑定您的QQ，验证码：%code%。请访问 %web_link% 进行绑定。"
-    welcome: "&a欢迎回来, %player%!"
-    world-change-denied: "&c未验证无法离开当前世界！"
-    actionbar-prompt: "&6请输入 /bind <验证码> <QQ号码> 以完成绑定。"
-    binding-successful: "&a绑定成功！"
+  # 文本消息已迁移到 lang/zh_CN.yml 等语言文件中。
+  # 如需修改提示文本，请编辑 plugins/AuthWithQq/lang/zh_CN.yml

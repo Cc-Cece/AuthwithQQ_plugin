@@ -45,6 +45,8 @@ dependencies {
     implementation 'io.papermc:paperlib:1.0.8'
     compileOnly 'org.xerial:sqlite-jdbc:3.45.1.0'
     implementation 'org.mindrot:jbcrypt:0.4'
+    // Lightweight WebSocket server for OneBot v11 reverse WS integration
+    implementation 'org.java-websocket:Java-WebSocket:1.5.4'
     spotbugsPlugins 'com.h3xstream.findsecbugs:findsecbugs-plugin:1.14.0'
     testCompileOnly 'com.github.spotbugs:spotbugs-annotations:4.9.8'
     testImplementation 'io.papermc.paper:paper-api:1.21.1-R0.1-SNAPSHOT'

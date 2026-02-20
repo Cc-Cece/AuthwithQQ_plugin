@@ -1,0 +1,124 @@
+onebot:
+  prefix: "【AuthWithQq】"
+
+  common:
+    error-command-generic: "⚠️ 處理指令時發生錯誤，請稍後重試。"
+
+  bind:
+    invalid-code: "❌ 驗證碼無效或已過期\n\n💡 請在遊戲內重新取得驗證碼"
+    already-bound-same-account: "ℹ️ 你已綁定此帳號\n\n👤 玩家: {player}"
+    already-bound-other-qq: "❌ 該帳號已綁定其他QQ\n\n💡 如需解綁請聯繫管理員"
+    max-accounts-reached: "❌ QQ綁定數量已達上限\n\n📊 當前限制: {max} 個帳號"
+    success: "✅ 綁定成功！\n━━━━━━━━━━━━━━━\n👤 玩家: {player}\n🆔 UUID: {uuid_short}...\n📱 QQ: {qq}"
+
+  bots:
+    disabled: "🚫 假人功能已停用"
+    bind-success: "✅ 假人綁定成功！\n━━━━━━━━━━━━━━━\n🤖 名稱: {bot}\n🆔 UUID: {uuid_short}...\n👤 玩家: {player}\n📱 QQ: {qq}\n📊 當前已綁定: {count} / {max}"
+    unbind-success: "✅ 假人解綁成功！\n━━━━━━━━━━━━━━━\n🤖 名稱: {bot}\n👤 玩家: {player}\n📱 QQ: {qq}"
+    list-empty: "📋 假人列表\n━━━━━━━━━━━━━━━\n📭 暫無假人\n\n💡 使用「/綁定假人 <名稱>」新增假人"
+    list-header: "📋 假人列表\n━━━━━━━━━━━━━━━"
+    list-line: "{index}. {bot}  (UUID: {uuid_short}...)"
+    list-footer: "━━━━━━━━━━━━━━━\n📊 當前已綁定: {count} / {max}"
+    list-error: "⚠️ 取得假人列表時發生錯誤，請稍後重試"
+    max-bots-reached: "❌ 已達到假人數量上限\n\n📊 當前: {count} / {max}"
+    bot-not-found: "❌ 未找到名為「{bot}」的假人\n\n💡 請檢查名稱是否正確"
+    not-your-bot: "❌ 無法解綁\n\n💡 假人「{bot}」不屬於你"
+
+  bind-extra:
+    need-bound-first: "❌ 你尚未綁定QQ\n\n💡 請先使用「綁定 <驗證碼>」綁定你的帳號"
+
+  register:
+    no-permission: "❌ 僅群管理員可以使用「登記」指令"
+    usage: "❌ 指令格式錯誤\n\n用法：\n登記 <QQ號> <MC名>\n或：\n登記 @某人 <MC名>"
+    invalid-qq: "❌ QQ號格式不正確\n\n用法：\n登記 <QQ號> <MC名>\n或：\n登記 @某人 <MC名>"
+    target-qq-not-found: "❌ 指令格式錯誤，未找到目標 QQ\n\n用法：\n登記 <QQ號> <MC名>\n或：\n登記 @某人 <MC名>"
+    player-not-found: "❌ 未找到玩家「{player}」"
+    qq-max-accounts-reached: "❌ QQ綁定數量已達上限\n\n📊 當前限制: {max} 個帳號"
+    qq-already-bound-other: "❌ QQ {qq} 已綁定其他玩家：{player}"
+    success: "✅ 登記成功！\n━━━━━━━━━━━━━━━\n👤 玩家: {player}\n🆔 UUID: {uuid_short}...\n📱 QQ: {qq}"
+    error-generic: "⚠️ 處理登記指令時發生錯誤，請稍後重試"
+
+  help:
+    header: "📖 支援的指令：\n━━━━━━━━━━━━━━━"
+    lines:
+      - "🔗 綁定 <驗證碼>\n   └ 使用驗證碼綁定MC帳號"
+      - "🤖 /綁定假人 <名稱>\n   └ 綁定一個假人到你的帳號"
+      - "🗑️ /解綁假人 <名稱>\n   └ 解綁指定假人"
+      - "📋 /假人列表\n   └ 檢視你綁定的所有假人"
+      - "❓ /幫助\n   └ 顯示此幫助訊息"
+
+messages:
+  auth:
+    no-permission: "&c你沒有權限使用此指令。"
+    reload-success: "&a設定已重新載入完成。"
+
+    help:
+      header: "&6--- AuthWithQq 管理指令 ---"
+      reload: "&b/auth reload &7- 重新載入插件設定。"
+      csv: "&b/auth csv <export|import> &7- 匯出/匯入玩家資料。"
+      whitelist: "&b/auth whitelist <add|remove> <player> &7- 管理白名單玩家。"
+      bind: "&b/auth bind <player> <qq> &7- 強制綁定玩家QQ。"
+      bot-add: "&b/auth bot add <owner> <bot_name> &7- 綁定假人到玩家。"
+      bot-unbind: "&b/auth bot unbind <bot_name> &7- 解綁指定假人。"
+      unbind: "&b/auth unbind <player> &7- 解除玩家QQ綁定。"
+
+    command-usage:
+      csv: "&c用法: /auth csv <export|import>"
+      whitelist: "&c用法: /auth whitelist <add|remove> <player>"
+      bind: "&c用法: /auth bind <player> <qq>"
+
+    csv:
+      export-success: "&a玩家資料已成功匯出到檔案: &f%file%"
+      export-fail: "&c匯出玩家資料失敗: &f%error%"
+      import-file-not-found: "&c找不到匯入檔案 import.csv。"
+      import-success: "&a已成功從檔案匯入玩家資料: &f%file%"
+      import-fail: "&c匯入玩家資料失敗: &f%error%"
+
+    whitelist:
+      add-success: "&a已將玩家 &f%player% &a加入白名單。"
+      already-whitelisted: "&e玩家 &f%player% &e已在白名單中。"
+      remove-success: "&a已將玩家 &f%player% &a移出白名單。"
+      not-whitelisted: "&c玩家 &f%player% &c不在白名單中。"
+
+    bind:
+      player-not-found: "&c未找到玩家: &f%player%"
+      invalid-qq: "&c無效的QQ號碼: &f%qq%"
+      force-bind-success: "&a已強制綁定: &f%player% &7(UUID: %uuid%) &a⇔ QQ: &f%qq%"
+
+    bot:
+      owner-not-found: "&c未找到玩家（假人擁有者）: &f%owner%"
+      owner-qq-not-bound: "&c玩家 &f%owner% &c尚未綁定QQ，無法為其新增假人。"
+      bot-limit-reached: "&c玩家 &f%owner% &c的假人數量已達上限 (&f%limit%&c)。"
+      add-success: "&a假人 &f%bot_name% &a已成功綁定到玩家 &f%owner_name% &7(UUID: %owner_uuid%)，假人UUID: &f%bot_uuid%"
+      remove-not-owned: "&c未找到名為 &f%bot_name% &c的假人，或該假人不屬於任何玩家。"
+      remove-success: "&a已刪除假人 &f%bot_name%&a。"
+
+    unbind:
+      usage: "&c用法: /auth unbind <player>"
+      player-not-found: "&c未找到玩家: &f%player%"
+      success: "&a已成功解除玩家 &f%player% &a的QQ綁定。"
+
+  bind-command:
+    player-only: "&c此指令僅限玩家使用。"
+    usage: "&c用法: /bind getcode | profile"
+    invalid-qq: "&c無效的QQ號碼: %qq%。"
+    already-bound-to-this-qq: "&e你已經綁定到此QQ號碼了。"
+    already-bound-to-other-qq: "&c你已經綁定到其他QQ號碼了，如需解綁請聯繫管理員。"
+    invalid-or-expired-code: "&c驗證碼無效或已過期，請嘗試重新加入遊戲取得。"
+    bind-limit-reached: "&c此QQ號碼已達到綁定上限。"
+    not-bound: "&c玩家 %player% 尚未綁定QQ，無法修改資料。請先綁定！"
+    profile-link-prefix: "&a點擊此處修改您的綁定資料: "
+    web-bind-only: "&c由於安全原因，玩家綁定功能現在只能透過網頁進行。請使用 /bind getcode 取得連結。"
+    bot:
+      owner-not-bound: "&c你尚未綁定QQ，無法新增假人。請先綁定你的QQ！"
+      limit-reached: "&c你已達到假人綁定上限 (%limit%)。"
+      add-success: "&a假人 %bot_name% 已成功綁定到你的帳號。"
+      remove-not-owned: "&c假人 %bot_name% 不是你的，或者不存在。"
+      remove-success: "&a假人 %bot_name% 已成功解除綁定。"
+
+  guest:
+    join-prompt: "&6請綁定您的QQ，驗證碼：%code%。請訪問 %web_link% 進行綁定。"
+    welcome: "&a歡迎回來, %player%!"
+    world-change-denied: "&c未驗證無法離開當前世界！"
+    actionbar-prompt: "&6請輸入 /bind <驗證碼> <QQ號碼> 以完成綁定。"
+    binding-successful: "&a綁定成功！"
