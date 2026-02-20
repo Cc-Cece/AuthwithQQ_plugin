@@ -1,18 +1,23 @@
 binding:
-  code-length: 6 # 整数，默认 6。支持生成 4-8 位的数字验证码。
-  code-expiration: 300 # 整数，单位秒，默认 300 (5分钟)。验证码的过期时间。
-  custom-fields: # 自定义字段，不强制，仅用于某些特殊情况，无需请把示例删除
-    # 真人玩家自定义字段
+  # ========== 验证码配置 ==========
+  code-length: 6 # 整数，默认 6。验证码的位数，支持 4-8 位数字。玩家在游戏中会收到此长度的验证码用于绑定QQ。
+  code-expiration: 300 # 整数，单位秒，默认 300 (5分钟)。验证码的有效期，超过此时间后验证码将失效，玩家需要重新获取。
+
+  # ========== 自定义字段配置 ==========
+  # 自定义字段用于在绑定过程中收集额外的玩家信息（如学校、专业等）。
+  # 不强制配置，如果不需要自定义字段，可以删除整个 custom-fields 部分或留空。
+  custom-fields:
+    # 真人玩家自定义字段：在玩家绑定QQ时显示的额外表单字段
     player:
-      - name: "school"
-        type: "text"
-        label: "学校"
-        required: true
+      - name: "school" # 字段名称（数据库存储用，英文）
+        type: "text" # 字段类型：text（文本输入框）
+        label: "学校" # 字段显示标签（用户看到的文字）
+        required: true # 是否必填：true=必填，false=选填
       - name: "major"
         type: "text"
         label: "专业"
         required: false
-    # 假人自定义字段
+    # 假人自定义字段：在绑定假人时显示的额外表单字段
     bot:
       - name: "bot_type"
         type: "text"
@@ -22,34 +27,68 @@ binding:
         type: "text"
         label: "用途"
         required: false
-  max-accounts-per-qq: 1 # 整数，默认 1。一个QQ号允许绑定的MC账号数量。
-  max-bots-per-player: 0 # 整数，默认 0。每个真实玩家允许绑定的假人数量。0 表示禁止添加假人，负数（如 -1）表示不限制。
-  profile-token-expiration: 300 # 整数，单位秒，默认 300 (5分钟)。玩家资料修改页面的会话令牌过期时间。
-  web-login-enabled: true # 布尔值，默认 true。是否启用网页登录功能。
-  web-password-min-length: 6 # 整数，默认 6。网页登录密码最小长度。
-  web-session-expiration: 1440 # 整数，单位分钟，默认 1440 (24小时)。网页登录会话过期时间，0 表示不过期。
-  force-group-binding: false # 布尔值，默认 false。是否强制要求 QQ 必须在指定QQ群内才能通过网页完成绑定。
-  # 若为 true，则在网页绑定时会检查 QQ 是否在下方配置的QQ群成员列表中（通过 OneBot 缓存的群成员数据判断）。
-  # 具体群列表来源：
-  # - 若 group-binding-groups 非空，则使用该列表
-  # - 否则复用 onebot.allowed-groups
-  group-binding-groups: [] # 长整数列表，群号。用于“强制入群”检查的群列表，留空则使用 onebot.allowed-groups。
-  disallow-web-bind-if-qq-exists: true # 布尔值，默认 true。若为 true，当 QQ 已绑定任意账号时，禁止通过网页再次绑定。
+
+  # ========== 绑定数量限制 ==========
+  max-accounts-per-qq: 1 # 整数，默认 1。一个QQ号最多可以绑定多少个MC账号。例如设置为 2 则允许一个QQ绑定两个不同的MC账号。
+  max-bots-per-player: 0 # 整数，默认 0。每个真实玩家最多可以绑定多少个假人。
+  # 取值说明：
+  # - 0：禁止添加假人
+  # - 正数（如 5）：最多允许绑定 5 个假人
+  # - 负数（如 -1）：不限制假人数量
+
+  # ========== 假人名称验证 ==========
+  bot-name-prefix: "" # 字符串，默认空。假人名称必须以此前缀开头才能被添加。
+  # 例如设置为 "Bot-" 则只允许添加名称以 "Bot-" 开头的假人（如 "Bot-Player1"）。
+  # 为空字符串则不进行前缀验证，允许任何名称的假人。
+
+  # ========== 网页功能配置 ==========
+  profile-token-expiration: 300 # 整数，单位秒，默认 300 (5分钟)。玩家资料编辑页面的临时访问令牌有效期。
+  # 玩家通过游戏内命令获取资料编辑链接后，链接中的令牌在此时间内有效。
+  web-login-enabled: true # 布尔值，默认 true。是否启用网页登录功能。关闭后玩家无法通过网页登录系统。
+  web-password-min-length: 6 # 整数，默认 6。网页登录密码的最小长度要求。密码长度必须大于等于此值。
+  web-session-expiration: 1440 # 整数，单位分钟，默认 1440 (24小时)。网页登录会话的有效期。
+  # 玩家登录后，会话在此时间内有效。设置为 0 表示会话永不过期（不推荐，存在安全风险）。
+
+  # ========== 群组绑定限制 ==========
+  force-group-binding: false # 布尔值，默认 false。是否强制要求QQ必须在指定QQ群内才能通过网页完成绑定。
+  # 若为 true，则在网页绑定时会检查QQ是否在下方配置的QQ群成员列表中。
+  # 检查方式：通过 OneBot 缓存的群成员数据进行判断（需要先启用 OneBot 并加入过群）。
+  group-binding-groups: [] # 长整数列表，群号。用于"强制入群"检查的QQ群列表。
+  # 例如：[123456789, 987654321] 表示只允许这两个群内的QQ进行绑定。
+  # 留空则使用 onebot.allowed-groups 的配置（如果 OneBot 已启用）。
+  disallow-web-bind-if-qq-exists: true # 布尔值，默认 true。是否禁止已绑定QQ的玩家通过网页再次绑定。
+  # 若为 true，当QQ已绑定任意账号时，禁止通过网页再次绑定（防止重复绑定）。
+  # 若为 false，则允许已绑定的QQ通过网页绑定其他账号（可能导致一个QQ绑定多个账号）。
 
 whitelist:
-  players: [] # 字符串列表，玩家ID。列表中的玩家无需绑定即可进入游戏。
-  bypass-ops: true # 布尔值，默认 true。OP是否自动跳过验证。
+  # ========== 白名单配置 ==========
+  players: [] # 字符串列表，玩家ID（游戏内名称）。列表中的玩家无需绑定QQ即可进入游戏，自动跳过游客模式限制。
+  # 例如：["Player1", "Player2"] 表示这两个玩家无需绑定即可进入。
+  # 注意：白名单玩家仍然可以正常绑定QQ，绑定后可以管理假人等完整功能。
+  bypass-ops: true # 布尔值，默认 true。OP（服务器管理员）是否自动跳过验证。
+  # 若为 true，所有OP玩家自动跳过绑定验证，无需加入白名单即可进入游戏。
 
 server:
-  port: 8081 # 整数，默认 8081。服务器监听端口。如果使用了端口转发等工具，建议把该值和远程端口保持一致，避免构造出错误的访问链接。
-  token: "changeme" # 字符串，默认 "changeme"。服务器验证令牌，请务必修改为一个安全的随机字符串。
-  external-address: "127.0.0.1" # 用于玩家通过网页绑定时的外部访问地址。例如：example.com 或 123.45.67.89。如果留空或不配置，默认使用127.0.0.1。仅用于构造访问链接，不影响服务器实际监听的地址。
-  lang: "zh_CN" # 语言代码，默认 zh_CN。用于从 lang/<lang>.yml 加载文本消息。
+  # ========== 服务器配置 ==========
+  port: 8081 # 整数，默认 8081。HTTP服务器监听的端口号，用于提供网页绑定和管理界面。
+  # 如果使用了端口转发、反向代理等工具，建议将此值设置为实际对外暴露的端口，避免构造出错误的访问链接。
+  token: "changeme" # 字符串，默认 "changeme"。API访问令牌，用于保护管理接口的安全。
+  # ⚠️ 重要：请务必修改为一个安全的随机字符串（建议使用密码生成器生成至少32位随机字符串）。
+  # 此令牌用于访问管理API（如 /api/players、/api/unbind 等），泄露可能导致数据泄露风险。
+  external-address: "127.0.0.1" # 字符串，默认 "127.0.0.1"。用于构造玩家访问链接的外部地址。
+  # 例如：设置为 "example.com" 或 "123.45.67.89"，玩家收到的绑定链接将使用此地址。
+  # 注意：此配置仅用于构造访问链接，不影响服务器实际监听的地址（服务器仍监听所有接口）。
+  # 如果服务器在本地运行且仅内网访问，可以保持默认值 "127.0.0.1"。
+  lang: "zh_CN" # 字符串，默认 "zh_CN"。插件使用的语言代码，用于从 lang/<lang>.yml 加载文本消息。
+  # 可选值：zh_CN（简体中文）、zh_TW（繁体中文）、en_US（英文）。
+  # 语言文件位于 plugins/AuthWithQq/lang/ 目录下。
 
 onebot:
-  enabled: false # 布尔值，默认 false。是否启用 OneBot v11 WebSocket 反向连接功能。
-  # OneBot v11 WebSocket 反向连接说明：
-  # 1. 在 OneBot 客户端（如 NapCat、go-cqhttp、Shamrock）中配置一个 websocketClients：
+  # ========== OneBot v11 WebSocket 反向连接配置 ==========
+  # OneBot 是一个统一的QQ机器人接口标准，支持多种QQ机器人客户端（如 NapCat、go-cqhttp、Shamrock 等）。
+  # 
+  # 配置步骤：
+  # 1. 在 OneBot 客户端中配置一个 websocketClients（反向WebSocket客户端）：
   #    {
   #      "enable": true,
   #      "name": "authwithqq",
@@ -58,32 +97,78 @@ onebot:
   #      "reportSelfMessage": false
   #    }
   # 2. 确保下面的 ws-port、ws-token 与 OneBot 客户端配置保持一致。
-  # 3. 目前仅实现以下命令：
-  #      - "绑定 <验证码>"
-  #      - "/绑定假人 <假人名称>"
-  #      - "/解绑假人 <假人名称>"
-  #      - "/假人列表"
-  #      - "/帮助" 或 "/help"
-  ws-port: 8080 # 整数，默认 8080。OneBot WebSocket 监听端口。
-  ws-token: "" # 字符串，默认空。访问令牌。如果设置，OneBot 客户端必须在 URL 中通过 access_token 传递相同的值。
-  allow-private: true # 布尔值，默认 true。是否允许私聊使用命令。
-  allowed-groups: [] # 长整数列表，群号。允许使用命令的群聊列表。空列表表示不允许群聊使用命令。例如：[123456789, 987654321]
-  log-level: 1 # 整数，默认 1。日志输出级别：1=仅命令执行日志，2=全部日志（含连接、消息等），3=不输出日志
+  # 3. 启用后，玩家可以通过QQ私聊或群聊使用以下命令：
+  #    - "绑定 <验证码>" - 使用游戏内获取的验证码绑定QQ
+  #    - "/绑定假人 <假人名称>" - 绑定一个假人到你的账号
+  #    - "/解绑假人 <假人名称>" - 解绑指定的假人
+  #    - "/假人列表" - 查看你绑定的所有假人
+  #    - "/帮助" 或 "/help" - 显示帮助信息
+  #    - "登记 <QQ号> <MC名>" - 群管理员专用，直接绑定QQ和MC账号
+  enabled: false # 布尔值，默认 false。是否启用 OneBot v11 WebSocket 反向连接功能。
+  ws-port: 8080 # 整数，默认 8080。OneBot WebSocket 服务器监听的端口号。
+  # OneBot 客户端会连接到此端口。确保此端口未被其他程序占用，且防火墙允许此端口访问。
+  ws-token: "" # 字符串，默认空。WebSocket 连接访问令牌，用于验证 OneBot 客户端的身份。
+  # 如果设置，OneBot 客户端必须在连接URL中通过 access_token 参数传递相同的值。
+  # 例如：ws://服务器地址:8080/onebot/v11/ws?access_token=你的token
+  # 留空则不进行令牌验证（不推荐，存在安全风险）。
+  allow-private: true # 布尔值，默认 true。是否允许玩家通过QQ私聊使用命令。
+  # 若为 false，则只允许在配置的群聊中使用命令，私聊消息将被忽略。
+  allowed-groups: [] # 长整数列表，群号。允许使用命令的QQ群列表。
+  # 例如：[123456789, 987654321] 表示只允许这两个群内的成员使用命令。
+  # 空列表 [] 表示不允许任何群聊使用命令（但仍允许私聊，如果 allow-private 为 true）。
+  log-level: 1 # 整数，默认 1。OneBot WebSocket 服务器的日志输出级别。
+  # 可选值：
+  # - 1：仅输出命令执行日志（推荐，信息量适中）
+  # - 2：输出全部日志（包括连接、消息接收等，信息量大，用于调试）
+  # - 3：不输出任何日志（静默模式，插件仍正常工作）
 
 guest-mode:
-  allow-move: true # 布尔值，默认 true。如果为 false，则给予玩家 SLOW (等级 255) 和 JUMP (等级 128) 药水效果以禁止移动和跳跃。
-  allow-interact: false # 布尔值，默认 false。如果为 false，则监听并取消 PlayerInteractEvent (物理交互), EntityDamageByEntityEvent (攻击), PlayerDropItemEvent (丢弃), EntityPickupItemEvent (拾取)。
-  allow-world-change: false # 布尔值，默认 false。如果为 false，则监听 PlayerTeleportEvent 和 PlayerPortalEvent。如果 event.getTo().getWorld() 与 event.getFrom().getWorld() 不同，则取消传送。
-  gamemode: "SURVIVAL" # 字符串，默认 "SURVIVAL"。玩家进入游客模式时，强制设置为该游戏模式（如 ADVENTURE 或 SPECTATOR）。
-  potion-effects: [] # 列表。额外的负面效果配置（如 BLINDNESS）。支持配置效果类型和等级。
+  # ========== 游客模式行为限制 ==========
+  allow-move: true # 布尔值，默认 true。未绑定QQ的玩家（游客）是否可以移动。
+  # 若为 false，则给予玩家 SLOW（缓慢，等级255）和 JUMP（跳跃，等级128）药水效果以禁止移动和跳跃。
+  # 注意：等级255的SLOW效果会完全禁止移动，等级128的JUMP效果会禁止跳跃。
+  allow-interact: false # 布尔值，默认 false。游客是否可以与游戏世界交互。
+  # 若为 false，则监听并取消以下事件：
+  # - PlayerInteractEvent（物理交互，如点击方块、使用物品）
+  # - EntityDamageByEntityEvent（攻击其他实体）
+  # - PlayerDropItemEvent（丢弃物品）
+  # - EntityPickupItemEvent（拾取物品）
+  allow-world-change: false # 布尔值，默认 false。游客是否可以传送到其他世界。
+  # 若为 false，则监听 PlayerTeleportEvent 和 PlayerPortalEvent。
+  # 如果传送目标世界与当前世界不同，则取消传送（禁止跨世界传送）。
+  gamemode: "SURVIVAL" # 字符串，默认 "SURVIVAL"。游客进入游戏时强制设置的游戏模式。
+  # 可选值：SURVIVAL（生存模式）、ADVENTURE（冒险模式）、SPECTATOR（观察者模式）。
+  # 建议设置为 ADVENTURE 或 SPECTATOR 以进一步限制游客行为。
+  potion-effects: [] # 列表，默认空。游客进入游戏时自动给予的额外负面药水效果。
+  # 例如：[{"type": "BLINDNESS", "level": 1}] 表示给予失明效果。
+  # 支持配置效果类型（如 BLINDNESS、POISON、WITHER）和等级（1-255）。
+
+  # ========== 游客允许使用的命令 ==========
   allowed-commands:
-    - "/login"
-    - "/register"
-    - "/bind"
-  allow-fake-players: false # 布尔值，默认 false。如果为 true，则假人（NPC）将自动跳过验证。
-  skip-npc-statistics: true # 布尔值，默认 true。如果为 true，则假人（NPC）的加入/离开事件不会被记录到统计中。
-  verification-display-method: "BOTH" # 字符串，可选值："CODE_ONLY" (只发送验证码), "WEB_ONLY" (只发送网页链接), "BOTH" (两者都发送)。
+    - "/login" # 允许使用登录命令（如果服务器有登录插件）
+    - "/register" # 允许使用注册命令（如果服务器有注册插件）
+    - "/bind" # 允许使用绑定命令（获取验证码、查看资料等）
+
+  # ========== 假人（NPC）处理 ==========
+  allow-fake-players: false # 布尔值，默认 false。假人（NPC）是否自动跳过验证。
+  # 若为 true，则所有假人（NPC）自动跳过游客模式限制，无需绑定即可正常游戏。
+  # 注意：此处的"假人"指的是服务器中的NPC实体，不是玩家绑定的假人账号。
+  skip-npc-statistics: true # 布尔值，默认 true。假人（NPC）的加入/离开事件是否不记录到统计中。
+  # 若为 true，则假人的加入/离开不会被计入今日在线统计、最近活动等数据中。
+
+  # ========== 验证码显示方式 ==========
+  verification-display-method: "BOTH" # 字符串，默认 "BOTH"。游客进入游戏时如何显示验证信息。
+  # 可选值：
+  # - "CODE_ONLY"：只发送验证码（游戏内聊天消息）
+  # - "WEB_ONLY"：只发送网页绑定链接（游戏内聊天消息）
+  # - "BOTH"：同时发送验证码和网页链接（推荐，给玩家更多选择）
 
 messages:
-  # 文本消息已迁移到 lang/zh_CN.yml 等语言文件中。
-  # 如需修改提示文本，请编辑 plugins/AuthWithQq/lang/zh_CN.yml
+  # ========== 文本消息配置 ==========
+  # 注意：文本消息已迁移到 lang/zh_CN.yml 等语言文件中。
+  # 如需修改提示文本（如游戏内消息、OneBot回复消息等），请编辑以下文件：
+  # - plugins/AuthWithQq/lang/zh_CN.yml（简体中文）
+  # - plugins/AuthWithQq/lang/zh_TW.yml（繁体中文）
+  # - plugins/AuthWithQq/lang/en_US.yml（英文）
+  # 
+  # 语言文件支持占位符替换，例如 {player}、{qq} 等，具体请参考语言文件中的注释。

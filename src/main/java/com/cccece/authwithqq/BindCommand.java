@@ -144,6 +144,13 @@ public class BindCommand implements CommandExecutor, TabCompleter {
         }
         // Negative number means unlimited, allow adding
 
+        // Validate bot name prefix
+        if (!plugin.validateBotName(botName)) {
+            String prefix = plugin.getConfig().getString("binding.bot-name-prefix", "");
+            player.sendMessage(plugin.getMessageManager().getMessage("messages.bind-command.bot.invalid-prefix", Collections.singletonMap("%prefix%", prefix)));
+            return;
+        }
+
         UUID botUuid = UUID.nameUUIDFromBytes(("Bot-" + botName).getBytes(StandardCharsets.UTF_8));
         
         plugin.getDatabaseManager().markPlayerAsBot(botUuid, ownerUuid, botName);

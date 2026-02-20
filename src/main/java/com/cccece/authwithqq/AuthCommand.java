@@ -153,11 +153,13 @@ public class AuthCommand implements CommandExecutor, TabCompleter {
     Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
       List<String> whitelistedPlayers = plugin.getConfig().getStringList("whitelist.players");
       boolean changed = false;
+      final boolean[] isAddRef = new boolean[1]; // Use array to make it effectively final
 
       if ("add".equals(action)) {
         if (!whitelistedPlayers.contains(playerName)) {
           whitelistedPlayers.add(playerName);
           changed = true;
+          isAddRef[0] = true;
           sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.whitelist.add-success", Collections.singletonMap("%player%", playerName)));
         } else {
           sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.whitelist.already-whitelisted", Collections.singletonMap("%player%", playerName)));
@@ -165,6 +167,7 @@ public class AuthCommand implements CommandExecutor, TabCompleter {
       } else if ("remove".equals(action)) {
         if (whitelistedPlayers.remove(playerName)) {
           changed = true;
+          isAddRef[0] = false;
           sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.whitelist.remove-success", Collections.singletonMap("%player%", playerName)));
         } else {
           sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.whitelist.not-whitelisted", Collections.singletonMap("%player%", playerName)));
@@ -178,6 +181,25 @@ public class AuthCommand implements CommandExecutor, TabCompleter {
         plugin.getConfig().set("whitelist.players", whitelistedPlayers);
         plugin.saveConfig();
         plugin.reloadConfig(); // Reload config to ensure in-memory list is updated
+        
+        // Apply changes immediately to online players
+        final boolean finalIsAdd = isAddRef[0];
+        Bukkit.getScheduler().runTask(plugin, () -> {
+          Player onlinePlayer = Bukkit.getPlayer(playerName);
+          if (onlinePlayer != null) {
+            if (finalIsAdd) {
+              // Player added to whitelist: remove guest restrictions immediately
+              plugin.getGuestListener().unmarkGuest(onlinePlayer.getUniqueId());
+            } else {
+              // Player removed from whitelist: check if they should be marked as guest
+              long qq = plugin.getDatabaseManager().getQq(onlinePlayer.getUniqueId());
+              if (qq == 0) {
+                // Player is not bound, mark as guest
+                plugin.getGuestListener().markGuest(onlinePlayer);
+              }
+            }
+          }
+        });
       }
     });
   }
@@ -249,6 +271,13 @@ public class AuthCommand implements CommandExecutor, TabCompleter {
         return;
       }
       // Negative number means unlimited, allow adding
+
+      // Validate bot name prefix
+      if (!plugin.validateBotName(botName)) {
+        String prefix = plugin.getConfig().getString("binding.bot-name-prefix", "");
+        sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.bot.invalid-prefix", new HashMap<String, String>() {{ put("%bot_name%", botName); put("%prefix%", prefix); }}));
+        return;
+      }
 
       // Generate a UUID for the bot (deterministic based on name for consistency if needed, or random)
       final UUID botUuid = UUID.nameUUIDFromBytes(("Bot-" + botName).getBytes(StandardCharsets.UTF_8));

@@ -571,6 +571,15 @@ public class OneBotWebSocketServer extends WebSocketServer {
         return "❌ 假人名称已被使用\n\n💡 请换一个名称: " + botName;
       }
 
+      // Validate bot name prefix
+      if (!plugin.validateBotName(botName)) {
+        String prefix = plugin.getConfig().getString("binding.bot-name-prefix", "");
+        return plugin.getMessage("onebot.bots.invalid-prefix", new java.util.HashMap<String, String>() {{
+          put("bot", botName);
+          put("prefix", prefix);
+        }});
+      }
+
       // Create bot UUID (deterministic based on name)
       UUID botUuid = UUID.nameUUIDFromBytes(("Bot-" + botName).getBytes(StandardCharsets.UTF_8));
 

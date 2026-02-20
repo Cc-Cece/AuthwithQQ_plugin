@@ -23,6 +23,7 @@ onebot:
     max-bots-reached: "❌ Bot limit reached\n\n📊 Current: {count} / {max}"
     bot-not-found: "❌ Bot \"{bot}\" not found\n\n💡 Please check the name"
     not-your-bot: "❌ Cannot unbind\n\n💡 Bot \"{bot}\" does not belong to you"
+    invalid-prefix: "❌ Bot name must start with \"{prefix}\"\n\n💡 Current name: {bot}"
 
   bind-extra:
     need-bound-first: "❌ You haven't bound your QQ yet\n\n💡 Please use \"bind <code>\" to bind your account first"
@@ -89,6 +90,7 @@ messages:
       owner-not-found: "&cOwner player not found: &f%owner%"
       owner-qq-not-bound: "&cPlayer &f%owner% &chas not bound a QQ yet. Cannot add bot."
       bot-limit-reached: "&cPlayer &f%owner% &chas reached their bot limit (&f%limit%&c)."
+      invalid-prefix: "&cBot name must start with &f%prefix%"
       add-success: "&aBot &f%bot_name% &ahas been bound to player &f%owner_name% &7(UUID: %owner_uuid%), bot UUID: &f%bot_uuid%"
       remove-not-owned: "&cBot &f%bot_name% &cdoes not exist or is not owned by any player."
       remove-success: "&aBot &f%bot_name% &ahas been removed."
@@ -112,6 +114,7 @@ messages:
     bot:
       owner-not-bound: "&cYou haven't bound your QQ yet. Please bind your QQ first!"
       limit-reached: "&cYou have reached your bot binding limit (%limit%)."
+      invalid-prefix: "&cBot name must start with &f%prefix%"
       add-success: "&aBot %bot_name% has been successfully bound to your account."
       remove-not-owned: "&cBot %bot_name% is not yours or does not exist."
       remove-success: "&aBot %bot_name% has been successfully unbound."
@@ -120,5 +123,5 @@ messages:
     join-prompt: "&6Please bind your QQ. Verification code: %code%. Visit %web_link% to bind."
     welcome: "&aWelcome back, %player%!"
     world-change-denied: "&cYou cannot leave this world without verification!"
-    actionbar-prompt: "&6Please enter /bind <code> <QQ> to complete binding."
+    actionbar-prompt: "&6Please bind your QQ. Verification code: %code%."
     binding-successful: "&aBinding successful!"

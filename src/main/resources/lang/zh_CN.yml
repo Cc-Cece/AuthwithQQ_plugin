@@ -23,6 +23,7 @@ onebot:
     max-bots-reached: "❌ 已达到假人数量上限\n\n📊 当前: {count} / {max}"
     bot-not-found: "❌ 未找到名为「{bot}」的假人\n\n💡 请检查名称是否正确"
     not-your-bot: "❌ 无法解绑\n\n💡 假人「{bot}」不属于你"
+    invalid-prefix: "❌ 假人名称必须以「{prefix}」开头\n\n💡 当前名称: {bot}"
 
   bind-extra:
     need-bound-first: "❌ 你尚未绑定QQ\n\n💡 请先使用「绑定 <验证码>」绑定你的账号"
@@ -89,6 +90,7 @@ messages:
       owner-not-found: "&c未找到玩家(假人所有者): &f%owner%"
       owner-qq-not-bound: "&c玩家 &f%owner% &c尚未绑定QQ，无法为其添加假人。"
       bot-limit-reached: "&c玩家 &f%owner% &c的假人数量已达到上限 (&f%limit%&c)。"
+      invalid-prefix: "&c假人名称必须以 &f%prefix% &c开头"
       add-success: "&a假人 &f%bot_name% &a已成功绑定到玩家 &f%owner_name% &7(UUID: %owner_uuid%)，假人UUID: &f%bot_uuid%"
       remove-not-owned: "&c未找到名为 &f%bot_name% &c的假人，或该假人不属于任何玩家。"
       remove-success: "&a已删除假人 &f%bot_name%&a。"
@@ -112,6 +114,7 @@ messages:
     bot:
       owner-not-bound: "&c你尚未绑定QQ，无法添加假人。请先绑定你的QQ！"
       limit-reached: "&c你已达到假人绑定上限 (%limit%)。"
+      invalid-prefix: "&c假人名称必须以 &f%prefix% &c开头"
       add-success: "&a假人 %bot_name% 已成功绑定到你的账号。"
       remove-not-owned: "&c假人 %bot_name% 不是你的，或者不存在。"
       remove-success: "&a假人 %bot_name% 已成功解除绑定。"
@@ -120,6 +123,6 @@ messages:
     join-prompt: "&6请绑定您的QQ，验证码：%code%。请访问 %web_link% 进行绑定。"
     welcome: "&a欢迎回来, %player%!"
     world-change-denied: "&c未验证无法离开当前世界！"
-    actionbar-prompt: "&6请输入 /bind <验证码> <QQ号码> 以完成绑定。"
+    actionbar-prompt: "&6请绑定您的QQ，验证码：%code%。"
     binding-successful: "&a绑定成功！"
 

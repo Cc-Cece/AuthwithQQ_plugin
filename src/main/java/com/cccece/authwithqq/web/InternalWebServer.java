@@ -449,12 +449,50 @@ public class InternalWebServer {
           new InputStreamReader(exchange.getRequestBody(), StandardCharsets.UTF_8))) {
         JsonObject body = gson.fromJson(reader, JsonObject.class);
         String playerName = body.get("player").getAsString();
-        boolean action = body.get("add").getAsBoolean();
+        boolean isAdd = body.get("add").getAsBoolean();
 
-        Bukkit.getScheduler().runTask(plugin, () -> {
-          org.bukkit.OfflinePlayer offlinePlayer = Bukkit.getOfflinePlayer(playerName);
-          offlinePlayer.setWhitelisted(action);
+        // Update plugin's whitelist configuration (not Bukkit's native whitelist)
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+          List<String> whitelistedPlayers = new java.util.ArrayList<>(
+              plugin.getConfig().getStringList("whitelist.players"));
+          boolean changed = false;
+
+          if (isAdd) {
+            if (!whitelistedPlayers.contains(playerName)) {
+              whitelistedPlayers.add(playerName);
+              changed = true;
+            }
+          } else {
+            if (whitelistedPlayers.remove(playerName)) {
+              changed = true;
+            }
+          }
+
+          if (changed) {
+            plugin.getConfig().set("whitelist.players", whitelistedPlayers);
+            plugin.saveConfig();
+            plugin.reloadConfig(); // Reload config to ensure in-memory list is updated
+
+            // Apply changes immediately to online players
+            Bukkit.getScheduler().runTask(plugin, () -> {
+              Player onlinePlayer = Bukkit.getPlayer(playerName);
+              if (onlinePlayer != null) {
+                if (isAdd) {
+                  // Player added to whitelist: remove guest restrictions immediately
+                  plugin.getGuestListener().unmarkGuest(onlinePlayer.getUniqueId());
+                } else {
+                  // Player removed from whitelist: check if they should be marked as guest
+                  long qq = plugin.getDatabaseManager().getQq(onlinePlayer.getUniqueId());
+                  if (qq == 0) {
+                    // Player is not bound, mark as guest
+                    plugin.getGuestListener().markGuest(onlinePlayer);
+                  }
+                }
+              }
+            });
+          }
         });
+
         sendResponse(exchange, 200, "{\"success\":true}");
       } catch (Exception e) {
         plugin.getLogger().log(Level.SEVERE, "Error during whitelist operation", e);
@@ -707,6 +745,13 @@ public class InternalWebServer {
           return;
         }
         // Negative number means unlimited, allow adding
+
+        // Validate bot name prefix
+        if (!plugin.validateBotName(botName)) {
+          String prefix = plugin.getConfig().getString("binding.bot-name-prefix", "");
+          sendResponse(exchange, 400, "{\"success\":false, \"error\":\"假人名称必须以 \\\"" + prefix + "\\\" 开头\"}");
+          return;
+        }
 
         // Generate a UUID for the bot (deterministic based on name for consistency)
         UUID botUuid = UUID.nameUUIDFromBytes(("Bot-" + botName).getBytes(StandardCharsets.UTF_8));
@@ -1294,6 +1339,16 @@ public class InternalWebServer {
                 }
                 // Negative number means unlimited, allow adding
 
+                // Validate bot name prefix
+                if (!plugin.validateBotName(botName)) {
+                    String prefix = plugin.getConfig().getString("binding.bot-name-prefix", "");
+                    JsonObject errorResponse = new JsonObject();
+                    errorResponse.addProperty("success", false);
+                    errorResponse.addProperty("error", "Bot name must start with \"" + prefix + "\"");
+                    sendResponse(exchange, 400, gson.toJson(errorResponse));
+                    return;
+                }
+
                 UUID botUuid = UUID.nameUUIDFromBytes(("Bot-" + botName).getBytes(StandardCharsets.UTF_8));
                 
                 plugin.getDatabaseManager().markPlayerAsBot(botUuid, ownerUuid, botName);
@@ -1768,6 +1823,11 @@ public class InternalWebServer {
                             
                             if (ownerUuid == null) {
                                 continue; // Skip if owner cannot be determined
+                            }
+                            
+                            // Validate bot name prefix (skip invalid names during import)
+                            if (!plugin.validateBotName(botName)) {
+                                continue; // Skip invalid bot names
                             }
                             
                             // Import bot

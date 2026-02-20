@@ -768,6 +768,20 @@ public class AuthWithQqPlugin extends JavaPlugin {
   }
 
   /**
+   * Validates if a bot name matches the configured prefix requirement.
+   *
+   * @param botName The bot name to validate.
+   * @return true if the bot name is valid (prefix check passes or prefix is not configured), false otherwise.
+   */
+  public boolean validateBotName(String botName) {
+    String prefix = getConfig().getString("binding.bot-name-prefix", "");
+    if (prefix == null || prefix.isEmpty()) {
+      return true; // No prefix configured, skip validation
+    }
+    return botName != null && botName.startsWith(prefix);
+  }
+
+  /**
    * Gets today's online time for each player.
    * Returns a map of player names to their online time in milliseconds.
    * This includes both currently online players and players who have quit.
