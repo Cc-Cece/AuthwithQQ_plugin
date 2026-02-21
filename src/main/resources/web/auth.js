@@ -141,8 +141,12 @@ document.addEventListener('DOMContentLoaded', () => {
             Loading.hide(loadingOverlay);
             
             if (customFields.length === 0) {
-                // 如果没有自定义字段，隐藏容器
+                // 如果没有自定义字段，隐藏容器并添加类以居中主卡片
                 customFieldsContainer.style.display = 'none';
+                const authLayout = document.querySelector('.auth-layout');
+                if (authLayout) {
+                    authLayout.classList.add('no-custom-fields');
+                }
                 return;
             }
             

@@ -96,6 +96,13 @@ public class GuestListener implements Listener {
       long qq = plugin.getDatabaseManager().getQqByName(playerName);
 
       plugin.getServer().getScheduler().runTask(plugin, () -> {
+        // Re-check player is still online after async task
+        Player onlinePlayer = plugin.getServer().getPlayer(uuid);
+        if (onlinePlayer == null || !onlinePlayer.isOnline()) {
+          // Player disconnected during async task, skip processing
+          return;
+        }
+        
         // --- NEW: Whitelist and Fake Player Bypass Logic ---
         List<String> whitelistedPlayers = plugin.getConfig().getStringList("whitelist.players");
         boolean bypassOps = plugin.getConfig().getBoolean("whitelist.bypass-ops", true);
@@ -103,46 +110,47 @@ public class GuestListener implements Listener {
         boolean skipNpcStatistics = plugin.getConfig().getBoolean("guest-mode.skip-npc-statistics", true);
 
         // Check for whitelisted players
-        if (whitelistedPlayers.contains(player.getName())) {
-          plugin.getLogger().info(player.getName() + " is whitelisted, skipping verification.");
+        if (whitelistedPlayers.contains(onlinePlayer.getName())) {
+          plugin.getLogger().info(onlinePlayer.getName() + " is whitelisted, skipping verification.");
           unmarkGuest(uuid);
           // Record player join for statistics (even if whitelisted)
-          plugin.recordPlayerJoin(uuid, player.getName());
+          plugin.recordPlayerJoin(uuid, onlinePlayer.getName());
           return;
         }
 
         // Check for ops if bypass-ops is enabled
-        if (bypassOps && player.isOp()) {
-          plugin.getLogger().info(player.getName() + " is an operator, skipping verification.");
+        // Check both isOp() and permission system (for compatibility with permission plugins like LuckPerms)
+        if (bypassOps && (onlinePlayer.isOp() || onlinePlayer.hasPermission("*") || onlinePlayer.hasPermission("bukkit.*"))) {
+          plugin.getLogger().info(onlinePlayer.getName() + " is an operator, skipping verification.");
           unmarkGuest(uuid);
           // Record player join for statistics (even if op)
-          plugin.recordPlayerJoin(uuid, player.getName());
+          plugin.recordPlayerJoin(uuid, onlinePlayer.getName());
           return;
         }
 
         // Check for fake players (Citizens NPC)
-        boolean isNpc = player.hasMetadata("NPC");
+        boolean isNpc = onlinePlayer.hasMetadata("NPC");
         if (allowFakePlayers && isNpc) { // Assuming "NPC" metadata for Citizens
-          plugin.getLogger().info(player.getName() + " is a fake player, skipping verification.");
+          plugin.getLogger().info(onlinePlayer.getName() + " is a fake player, skipping verification.");
           unmarkGuest(uuid);
           // Record player join for statistics only if not skipping NPC statistics
           if (!skipNpcStatistics) {
-            plugin.recordPlayerJoin(uuid, player.getName());
+            plugin.recordPlayerJoin(uuid, onlinePlayer.getName());
           }
           return;
         }
         // --- END NEW LOGIC ---
 
         if (qq == 0) {
-          markGuest(player); // Call the new markGuest method
+          markGuest(onlinePlayer); // Call the new markGuest method
         } else {
           // Player is bound, clear any existing guest status
           unmarkGuest(uuid); // Ensure any lingering effects are removed
-          player.sendMessage(plugin.getMessageManager().getMessage("messages.guest.welcome", Map.of("%player%", player.getName())));
+          onlinePlayer.sendMessage(plugin.getMessageManager().getMessage("messages.guest.welcome", Map.of("%player%", onlinePlayer.getName())));
         }
         
         // Record player join for statistics
-        plugin.recordPlayerJoin(uuid, player.getName());
+        plugin.recordPlayerJoin(uuid, onlinePlayer.getName());
       });
     });
   }

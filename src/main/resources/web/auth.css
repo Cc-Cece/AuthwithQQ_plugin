@@ -93,6 +93,18 @@ body {
     .custom-fields-card {
         height: 100%;
     }
+    
+    /* 如果没有自定义字段，主卡片居中 */
+    .auth-layout.no-custom-fields {
+        justify-content: center;
+    }
+    
+    .auth-layout.no-custom-fields .auth-main-card {
+        flex: 0 0 auto;
+        min-width: 500px;
+        max-width: 600px;
+        width: 100%;
+    }
 }
 
 /* 超大屏模式：优化布局 */
