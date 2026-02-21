@@ -16,7 +16,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const urlParams = new URLSearchParams(window.location.search);
     let token = urlParams.get('token');
     const backBtn = document.getElementById('backBtn');
-    
+
     // 如果没有 token 参数，尝试从 localStorage 获取 session token
     if (!token) {
         const sessionToken = localStorage.getItem('session_token');
@@ -32,10 +32,10 @@ document.addEventListener('DOMContentLoaded', () => {
             setTimeout(() => {
                 window.location.href = 'login.html';
             }, 2000);
-            return;
-        }
+        return;
+    }
     } else {
-        tokenInput.value = token;
+    tokenInput.value = token;
         // 隐藏返回按钮（从游戏内链接进入）
         if (backBtn) {
             backBtn.style.display = 'none';
@@ -78,9 +78,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 headers: headers
             });
             
-            if (response.status === 401) {
+                if (response.status === 401) {
                 throw new Error('无效或已过期的会话令牌');
-            }
+                }
             
             if (!response.ok) {
                 throw new Error('获取个人资料失败');
@@ -88,13 +88,13 @@ document.addEventListener('DOMContentLoaded', () => {
             
             const profile = await response.json();
             
-            uuidInput.value = profile.uuid;
+                uuidInput.value = profile.uuid;
             playerNameInput.value = profile.name || 'N/A';
             currentQqInput.value = profile.qq || '未绑定';
             newQqInput.value = profile.qq || ''; // 预填充当前QQ
-            
+
             // 清空自定义字段容器
-            customFieldsContainer.innerHTML = '';
+                customFieldsContainer.innerHTML = '';
 
             // 获取自定义字段定义（玩家类型）
             const metaResponse = await fetch('/api/meta?type=player');
@@ -110,31 +110,31 @@ document.addEventListener('DOMContentLoaded', () => {
                 emptyMsg.textContent = '暂无自定义字段';
                 customFieldsContainer.appendChild(emptyMsg);
             } else {
-                customFieldsDefs.forEach(fieldDef => {
-                    const formGroup = document.createElement('div');
-                    formGroup.className = 'form-group';
+                        customFieldsDefs.forEach(fieldDef => {
+                            const formGroup = document.createElement('div');
+                            formGroup.className = 'form-group';
 
-                    const label = document.createElement('label');
-                    label.setAttribute('for', fieldDef.name);
+                            const label = document.createElement('label');
+                            label.setAttribute('for', fieldDef.name);
                     label.textContent = fieldDef.label + (fieldDef.required ? ' *' : '');
-                    formGroup.appendChild(label);
+                            formGroup.appendChild(label);
 
-                    const input = document.createElement('input');
-                    input.setAttribute('type', fieldDef.type || 'text');
-                    input.setAttribute('id', fieldDef.name);
-                    input.setAttribute('name', fieldDef.name);
+                            const input = document.createElement('input');
+                            input.setAttribute('type', fieldDef.type || 'text');
+                            input.setAttribute('id', fieldDef.name);
+                            input.setAttribute('name', fieldDef.name);
                     input.setAttribute('placeholder', `请输入${fieldDef.label}`);
                     
-                    if (fieldDef.required) {
-                        input.setAttribute('required', 'true');
-                    }
+                            if (fieldDef.required) {
+                                input.setAttribute('required', 'true');
+                            }
                     
                     // 预填充现有数据
-                    if (profile.meta && profile.meta[fieldDef.name]) {
-                        input.value = profile.meta[fieldDef.name];
-                    }
+                            if (profile.meta && profile.meta[fieldDef.name]) {
+                                input.value = profile.meta[fieldDef.name];
+                            }
                     
-                    formGroup.appendChild(input);
+                            formGroup.appendChild(input);
                     
                     // 添加提示
                     const hint = document.createElement('span');
@@ -142,8 +142,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     hint.textContent = fieldDef.required ? '此字段为必填项' : '此字段为选填项';
                     formGroup.appendChild(hint);
                     
-                    customFieldsContainer.appendChild(formGroup);
-                });
+                            customFieldsContainer.appendChild(formGroup);
+                        });
             }
             
             Loading.hide(loadingOverlay);
@@ -151,7 +151,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
         } catch (error) {
             Loading.hide(loadingOverlay);
-            console.error('Error fetching profile:', error);
+                console.error('Error fetching profile:', error);
             Toast.error(`加载失败: ${error.message}`);
             
             customFieldsContainer.innerHTML = `
@@ -213,7 +213,7 @@ document.addEventListener('DOMContentLoaded', () => {
             qq: newQqValue ? parseInt(newQqValue) : parseInt(currentQqInput.value) || 0,
             meta: {}
         };
-        
+
         // 如果使用 profile session token，添加到 data
         if (token && tokenInput.value) {
             data.token = tokenInput.value;
@@ -257,13 +257,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     headers['X-Session-Token'] = sessionToken;
                 } else {
                     throw new Error('未登录，请先登录');
-                }
+        }
             }
             
             const response = await fetch('/api/profile/update', {
-                method: 'POST',
+            method: 'POST',
                 headers: headers,
-                body: JSON.stringify(data)
+            body: JSON.stringify(data)
             });
 
             const result = await response.json();

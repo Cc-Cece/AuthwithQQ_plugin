@@ -313,14 +313,14 @@ public class InternalWebServer {
       try (BufferedReader reader = new BufferedReader(
           new InputStreamReader(exchange.getRequestBody(), StandardCharsets.UTF_8))) {
         JsonObject body = gson.fromJson(reader, JsonObject.class);
-        String playerName = body.has("name") ? body.get("name").getAsString() : null;
+        String playerNameRaw = body.has("name") ? body.get("name").getAsString() : null;
         String numericVerificationCode = body.get("code").getAsString();
         long qq = body.get("qq").getAsLong();
-        if (playerName == null || playerName.trim().isEmpty()) {
+        if (playerNameRaw == null || playerNameRaw.trim().isEmpty()) {
           sendResponse(exchange, 400, "{\"success\":false, \"error\":\"Missing player name\"}");
           return;
         }
-        playerName = playerName.trim();
+        final String playerName = playerNameRaw.trim();
 
         if (!plugin.isValidCode(numericVerificationCode, playerName)) {
           sendResponse(exchange, 400, "{\"success\":false, \"error\":\"验证码无效或已过期\"}");
@@ -389,10 +389,19 @@ public class InternalWebServer {
                 entry.getValue().getAsString());
           }
         }
-        UUID playerUuid = plugin.getDatabaseManager().getPlayerUuid(playerName);
-        if (playerUuid != null) {
-          Bukkit.getScheduler().runTask(plugin, () -> plugin.handleBindingChange(playerUuid, qq));
-        }
+        // Update guest status immediately if player is online
+        Bukkit.getScheduler().runTask(plugin, () -> {
+          Player onlinePlayer = Bukkit.getPlayer(playerName);
+          if (onlinePlayer != null) {
+            plugin.getGuestListener().unmarkGuest(onlinePlayer.getUniqueId());
+          } else {
+            // Player not online, try to get UUID and update via handleBindingChange
+            UUID playerUuid = plugin.getDatabaseManager().getPlayerUuid(playerName);
+            if (playerUuid != null) {
+              plugin.handleBindingChange(playerUuid, qq);
+            }
+          }
+        });
         
         sendResponse(exchange, 200, "{\"success\":true}");
       } catch (Exception e) {
@@ -481,7 +490,7 @@ public class InternalWebServer {
                   plugin.getGuestListener().unmarkGuest(onlinePlayer.getUniqueId());
                 } else {
                   // Player removed from whitelist: check if they should be marked as guest
-                  long qq = plugin.getDatabaseManager().getQq(onlinePlayer.getUniqueId());
+                  long qq = plugin.getDatabaseManager().getQqByName(onlinePlayer.getName());
                   if (qq == 0) {
                     // Player is not bound, mark as guest
                     plugin.getGuestListener().markGuest(onlinePlayer);
@@ -878,41 +887,47 @@ public class InternalWebServer {
         String playerIdentifier = body.get("playerIdentifier").getAsString(); // Can be name or UUID
         long qq = body.get("qq").getAsLong();
 
-        // Resolve playerIdentifier to UUID on the main Bukkit thread
-        Future<UUID> futureUuid = Bukkit.getScheduler().callSyncMethod(plugin, () -> {
-          UUID uuid = null;
-          try {
-            // Try parsing as UUID first
-            uuid = UUID.fromString(playerIdentifier);
-          } catch (IllegalArgumentException e) {
-            // If not a UUID, try getting player by name
-            Player player = Bukkit.getPlayer(playerIdentifier);
-            if (player != null) {
-              uuid = player.getUniqueId();
-            } else {
-              // Try getting offline player by name
-              // Note: getOfflinePlayer can be slow and might not return UUID if player never joined
-              org.bukkit.OfflinePlayer offlinePlayer = Bukkit.getOfflinePlayer(playerIdentifier);
-              if (offlinePlayer.hasPlayedBefore() || offlinePlayer.isOnline()) {
-                uuid = offlinePlayer.getUniqueId();
-              }
-            }
+        // Determine if playerIdentifier is UUID or name
+        String playerName;
+        UUID playerUuidTemp = null;
+        try {
+          playerUuidTemp = UUID.fromString(playerIdentifier);
+          // If it's a UUID, get the name from database
+          playerName = plugin.getDatabaseManager().getNameByUuid(playerUuidTemp);
+          if (playerName == null) {
+            sendResponse(exchange, 400, "{\"success\":false, \"error\":\"Player not found with this UUID\"}");
+            return;
           }
-          return uuid;
-        });
-
-        UUID playerUuid = futureUuid.get(); // Blocks until UUID is resolved
-
-        if (playerUuid == null) {
-          sendResponse(exchange, 400, "{\"success\":false, \"error\":\"Player not found or invalid identifier\"}");
-          return;
+        } catch (IllegalArgumentException e) {
+          // It's a name, not a UUID
+          String trimmedName = playerIdentifier.trim();
+          if (trimmedName.isEmpty()) {
+            sendResponse(exchange, 400, "{\"success\":false, \"error\":\"Player name cannot be empty\"}");
+            return;
+          }
+          playerName = trimmedName;
         }
+        final String finalPlayerName = playerName;
 
-        // Update binding
-        plugin.getDatabaseManager().updateBinding(playerUuid, qq);
+        // Ensure player exists in database (creates record if not exists)
+        plugin.getDatabaseManager().ensurePlayerExists(finalPlayerName);
         
-        // Notify plugin about binding status change (e.g., clear guest status if online)
-        Bukkit.getScheduler().runTask(plugin, () -> plugin.handleBindingChange(playerUuid, qq));
+        // Update binding by name (name is now the primary key)
+        plugin.getDatabaseManager().updateBindingByName(finalPlayerName, qq);
+        
+        // Get UUID for status update (may be null if player never joined)
+        final UUID finalPlayerUuid = playerUuidTemp != null ? playerUuidTemp : plugin.getDatabaseManager().getPlayerUuid(finalPlayerName);
+        final long finalQq = qq;
+        
+        // Update guest status immediately if player is online
+        Bukkit.getScheduler().runTask(plugin, () -> {
+          Player onlinePlayer = Bukkit.getPlayer(finalPlayerName);
+          if (onlinePlayer != null) {
+            plugin.getGuestListener().unmarkGuest(onlinePlayer.getUniqueId());
+          } else if (finalPlayerUuid != null) {
+            plugin.handleBindingChange(finalPlayerUuid, finalQq);
+          }
+        });
 
         sendResponse(exchange, 200, "{\"success\":true, \"message\":\"Binding updated successfully\"}");
       } catch (Exception e) {
@@ -1078,27 +1093,28 @@ public class InternalWebServer {
             // For bots, update bot-specific fields
             if (meta.has("bot.owner_uuid")) {
               String ownerUuidStr = meta.get("bot.owner_uuid").getAsString();
-              UUID ownerUuid = null;
+              String ownerName = null;
               if (ownerUuidStr != null && !ownerUuidStr.isEmpty()) {
                 try {
-                  ownerUuid = UUID.fromString(ownerUuidStr);
+                  UUID ownerUuid = UUID.fromString(ownerUuidStr);
+                  ownerName = plugin.getDatabaseManager().getNameByUuid(ownerUuid);
                 } catch (IllegalArgumentException e) {
                   plugin.getLogger().warning("Invalid owner UUID format: " + ownerUuidStr);
                 }
               }
               // Get bot name to update
               String botName = plugin.getDatabaseManager().getNameByUuid(finalUuid);
-              if (botName != null) {
-                plugin.getDatabaseManager().markPlayerAsBot(finalUuid, ownerUuid, botName);
+              if (botName != null && ownerName != null) {
+                plugin.getDatabaseManager().markPlayerAsBot(botName, ownerName);
               }
             }
             
             // Update bot name if provided
             if (meta.has("bot.bot_name")) {
               String botName = meta.get("bot.bot_name").getAsString();
-              UUID ownerUuid = plugin.getDatabaseManager().getBotOwner(finalUuid);
-              if (botName != null && !botName.isEmpty()) {
-                plugin.getDatabaseManager().markPlayerAsBot(finalUuid, ownerUuid, botName);
+              String ownerName = plugin.getDatabaseManager().getBotOwnerName(finalUuid);
+              if (botName != null && !botName.isEmpty() && ownerName != null) {
+                plugin.getDatabaseManager().markPlayerAsBot(botName, ownerName);
               }
             }
             

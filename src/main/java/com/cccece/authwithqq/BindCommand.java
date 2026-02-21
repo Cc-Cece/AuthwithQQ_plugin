@@ -94,7 +94,7 @@ public class BindCommand implements CommandExecutor, TabCompleter {
   }
 
     private void handleGetCode(Player player) {
-        long qq = plugin.getDatabaseManager().getQq(player.getUniqueId());
+        long qq = plugin.getDatabaseManager().getQqByName(player.getName());
         if (qq != 0) {
             player.sendMessage(plugin.getMessageManager().getMessage("messages.bind-command.already-bound-to-this-qq"));
             return;
@@ -103,7 +103,7 @@ public class BindCommand implements CommandExecutor, TabCompleter {
     }
 
     private void handleProfile(Player player) {
-        long qq = plugin.getDatabaseManager().getQq(player.getUniqueId());
+        long qq = plugin.getDatabaseManager().getQqByName(player.getName());
         if (qq == 0) {
             player.sendMessage(plugin.getMessageManager().getMessage("messages.bind-command.not-bound", Collections.singletonMap("%player%", player.getName())));
             return;

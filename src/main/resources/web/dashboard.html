@@ -11,7 +11,7 @@
 <body>
     <div class="header">
         <div class="header-content">
-            <h1>服务器实时监控看板</h1>
+        <h1>服务器实时监控看板</h1>
             <div class="header-actions">
                 <button class="btn-secondary" id="refreshBtn" aria-label="手动刷新">
                     <span id="refreshIcon">🔄</span>
@@ -29,7 +29,7 @@
     <div class="container">
         <div class="card">
             <div class="card-header">
-                <h2>TPS (Ticks Per Second)</h2>
+            <h2>TPS (Ticks Per Second)</h2>
                 <div style="display: flex; align-items: center; gap: 12px;">
                     <select id="tpsTimeRange" style="padding: 4px 8px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 12px;">
                         <option value="50">最近50个点</option>
@@ -47,10 +47,10 @@
         
         <div class="card">
             <div class="card-header">
-                <h2>内存占用</h2>
+            <h2>内存占用</h2>
             </div>
             <div style="margin-top: 16px;">
-                <div class="progress-bar-container">
+            <div class="progress-bar-container">
                     <div class="progress-bar" id="memory-progress">
                         <div class="progress-label" id="memory-label">0%</div>
                     </div>
@@ -64,7 +64,7 @@
         
         <div class="card">
             <div class="card-header">
-                <h2>在线玩家</h2>
+            <h2>在线玩家</h2>
             </div>
             <div class="progress-bar-container">
                 <div class="progress-bar" id="players-progress">
@@ -74,9 +74,9 @@
             <p id="players-value" class="metric-value">加载中...</p>
             <div id="online-players-container">
                 <ul id="online-players-list" class="players-list">
-                    <!-- Online player IDs will be listed here -->
-                </ul>
-            </div>
+                <!-- Online player IDs will be listed here -->
+            </ul>
+        </div>
         </div>
         
         <div class="card">

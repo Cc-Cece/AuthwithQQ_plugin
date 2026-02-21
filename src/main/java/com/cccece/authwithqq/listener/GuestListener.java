@@ -93,7 +93,7 @@ public class GuestListener implements Listener {
     plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
       plugin.getDatabaseManager().addGuest(uuid, playerName);
       plugin.getDatabaseManager().ensurePlayerUuidUpdated(playerName, uuid);
-      long qq = plugin.getDatabaseManager().getQq(uuid);
+      long qq = plugin.getDatabaseManager().getQqByName(playerName);
 
       plugin.getServer().getScheduler().runTask(plugin, () -> {
         // --- NEW: Whitelist and Fake Player Bypass Logic ---
@@ -215,11 +215,13 @@ public class GuestListener implements Listener {
     // Generate and store verification code with expiration logic
     String verificationCode = plugin.getOrCreateCode(player.getName());
 
-    // Construct the web link for binding, including UUID and name for authentication context
+    // Construct the web link for binding, using name as the only identifier (UUID not needed)
     String externalAddress = plugin.getConfig().getString("server.external-address", "127.0.0.1");
     int port = plugin.getConfig().getInt("server.port", 8081);
     int codeExpiration = plugin.getConfig().getInt("binding.code-expiration", 300);
-    String webLink = String.format("http://%s:%d/web/auth.html?uuid=%s&name=%s&verificationCode=%s&expire=%d", externalAddress, port, uuid.toString(), player.getName(), verificationCode, codeExpiration);
+    // URL encode player name to handle special characters
+    String encodedName = java.net.URLEncoder.encode(player.getName(), java.nio.charset.StandardCharsets.UTF_8);
+    String webLink = String.format("http://%s:%d/web/auth.html?name=%s&verificationCode=%s&expire=%d", externalAddress, port, encodedName, verificationCode, codeExpiration);
 
     // Determine how to display verification information based on config
     String displayMethod = plugin.getConfig().getString("guest-mode.verification-display-method", "BOTH").toUpperCase();
@@ -288,7 +290,7 @@ public class GuestListener implements Listener {
   public void onChat(AsyncPlayerChatEvent event) {
     if (guestCache.contains(event.getPlayer().getUniqueId())) {
       event.setCancelled(true);
-      sendActionbar(event.getPlayer(), plugin.getOrCreateCode(event.getPlayer().getUniqueId()));
+      sendActionbar(event.getPlayer(), plugin.getOrCreateCode(event.getPlayer().getName()));
     }
   }
 
@@ -303,7 +305,7 @@ public class GuestListener implements Listener {
     if (guestCache.contains(event.getPlayer().getUniqueId())
         && !plugin.getConfig().getBoolean("guest-mode.allow-interact", true)) {
       event.setCancelled(true);
-      sendActionbar(event.getPlayer(), plugin.getOrCreateCode(event.getPlayer().getUniqueId()));
+      sendActionbar(event.getPlayer(), plugin.getOrCreateCode(event.getPlayer().getName()));
     }
   }
 
@@ -319,7 +321,7 @@ public class GuestListener implements Listener {
         && guestCache.contains(event.getDamager().getUniqueId())
         && !plugin.getConfig().getBoolean("guest-mode.allow-interact", true)) {
       event.setCancelled(true);
-      sendActionbar((Player) event.getDamager(), plugin.getOrCreateCode(event.getDamager().getUniqueId()));
+      sendActionbar((Player) event.getDamager(), plugin.getOrCreateCode(event.getDamager().getName()));
     }
     if (event.getEntity() instanceof Player
         && guestCache.contains(event.getEntity().getUniqueId())
@@ -340,7 +342,7 @@ public class GuestListener implements Listener {
     if (guestCache.contains(event.getPlayer().getUniqueId())
         && !plugin.getConfig().getBoolean("guest-mode.allow-interact", true)) {
       event.setCancelled(true);
-      sendActionbar(event.getPlayer(), plugin.getOrCreateCode(event.getPlayer().getUniqueId()));
+      sendActionbar(event.getPlayer(), plugin.getOrCreateCode(event.getPlayer().getName()));
     }
   }
 
@@ -356,7 +358,7 @@ public class GuestListener implements Listener {
         && guestCache.contains(event.getEntity().getUniqueId())
         && !plugin.getConfig().getBoolean("guest-mode.allow-interact", true)) {
       event.setCancelled(true);
-      sendActionbar((Player) event.getEntity(), plugin.getOrCreateCode(event.getEntity().getUniqueId()));
+      sendActionbar((Player) event.getEntity(), plugin.getOrCreateCode(event.getEntity().getName()));
     }
   }
 
@@ -417,7 +419,7 @@ public class GuestListener implements Listener {
       
       if (!isAllowed) {
         event.setCancelled(true);
-        sendActionbar(event.getPlayer(), plugin.getOrCreateCode(event.getPlayer().getUniqueId()));
+        sendActionbar(event.getPlayer(), plugin.getOrCreateCode(event.getPlayer().getName()));
       }
     }
   }

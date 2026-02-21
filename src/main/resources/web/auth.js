@@ -1,7 +1,6 @@
 document.addEventListener('DOMContentLoaded', () => {
     const { Toast, Loading, Utils } = window.MaterialComponents;
     const authForm = document.getElementById('authForm');
-    const uuidInput = document.getElementById('uuid');
     const nameInput = document.getElementById('name');
     const verificationCodeInput = document.getElementById('verificationCode');
     const codeValueDisplay = document.getElementById('codeValue');
@@ -18,7 +17,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 解析 URL 参数
     const urlParams = new URLSearchParams(window.location.search);
-    const uuid = urlParams.get('uuid');
     const name = urlParams.get('name');
     const verificationCode = urlParams.get('verificationCode');
     
@@ -28,12 +26,13 @@ document.addEventListener('DOMContentLoaded', () => {
     let codeExpirationTime = null;
     let countdownInterval = null;
 
-    // 初始化
-    if (uuid) {
-        uuidInput.value = uuid;
-    }
+    // 初始化 - 必须从 URL 参数中获取 name 和 verificationCode
     if (name) {
         nameInput.value = decodeURIComponent(name);
+    } else {
+        // 如果没有 name 参数，显示错误提示
+        console.error('Missing name parameter in URL');
+        Toast.error('缺少玩家名参数，请从游戏内获取正确的绑定链接');
     }
     if (verificationCode) {
         verificationCodeInput.value = verificationCode;
@@ -142,9 +141,24 @@ document.addEventListener('DOMContentLoaded', () => {
             Loading.hide(loadingOverlay);
             
             if (customFields.length === 0) {
+                // 如果没有自定义字段，隐藏容器
+                customFieldsContainer.style.display = 'none';
                 return;
             }
             
+            // 显示自定义字段容器
+            customFieldsContainer.style.display = 'block';
+            
+            // 创建自定义字段卡片（所有字段在一个卡片中）
+            const fieldsCard = document.createElement('div');
+            fieldsCard.className = 'custom-fields-card card';
+            
+            // 卡片标题
+            const cardTitle = document.createElement('h3');
+            cardTitle.textContent = '附加信息';
+            fieldsCard.appendChild(cardTitle);
+            
+            // 为每个自定义字段创建表单组
             customFields.forEach(field => {
                 const formGroup = document.createElement('div');
                 formGroup.className = 'form-group';
@@ -170,9 +184,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 hint.textContent = field.required ? '此字段为必填项' : '此字段为选填项';
                 formGroup.appendChild(input);
                 formGroup.appendChild(hint);
-
-                customFieldsContainer.appendChild(formGroup);
+                
+                fieldsCard.appendChild(formGroup);
             });
+            
+            // 将卡片添加到容器
+            customFieldsContainer.appendChild(fieldsCard);
         })
         .catch(error => {
             Loading.hide(loadingOverlay);
@@ -198,21 +215,66 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // 收集表单数据
-        const formData = new FormData(authForm);
-        const data = {
-            uuid: formData.get('uuid'),
-            code: formData.get('code'),
-            qq: parseInt(qqValue),
-            meta: {}
-        };
+        // 收集表单数据 - 直接从输入框获取，不依赖 formData
+        // 确保 nameInput 存在且有值
+        if (!nameInput) {
+            Toast.error('页面加载错误：找不到玩家名输入框');
+            console.error('nameInput is null');
+            return;
+        }
+        
+        // 优先从 URL 参数获取 name，如果输入框为空
+        let nameValue = nameInput.value ? nameInput.value.trim() : '';
+        if (!nameValue) {
+            // 尝试从 URL 参数获取
+            const urlName = urlParams.get('name');
+            if (urlName) {
+                nameValue = decodeURIComponent(urlName);
+                nameInput.value = nameValue;
+            }
+        }
+        
+        console.log('Name input value:', nameInput.value, 'Trimmed:', nameValue, 'URL name:', urlParams.get('name'));
+        
+        if (!nameValue) {
+            Toast.error('玩家名不能为空，请从游戏内获取正确的绑定链接');
+            console.error('Name input is empty. URL params:', window.location.search);
+            nameInput.focus();
+            return;
+        }
+        
+        if (!verificationCodeInput) {
+            Toast.error('页面加载错误：找不到验证码输入框');
+            console.error('verificationCodeInput is null');
+            return;
+        }
+        
+        const codeValue = verificationCodeInput.value ? verificationCodeInput.value.trim() : '';
+        console.log('Code input value:', verificationCodeInput.value, 'Trimmed:', codeValue);
+        
+        if (!codeValue) {
+            Toast.error('验证码不能为空');
+            console.error('Code input is empty');
+            verificationCodeInput.focus();
+            return;
+        }
+        
+        // 构建数据对象，明确只包含需要的字段，不包含 uuid
+        // 使用 Object.create(null) 确保没有原型链上的属性
+        const data = Object.create(null);
+        data.name = nameValue;
+        data.code = codeValue;
+        data.qq = parseInt(qqValue);
+        data.meta = Object.create(null);
 
         // 收集自定义字段
         customFieldsContainer.querySelectorAll('input').forEach(input => {
-            if (input.name !== 'uuid' && input.name !== 'qq' && input.name !== 'name' && input.name !== 'code') {
-                const value = input.value.trim();
+            // 明确排除 uuid、qq、name、code 字段
+            const inputName = input.name;
+            if (inputName && inputName !== 'uuid' && inputName !== 'qq' && inputName !== 'name' && inputName !== 'code') {
+                const value = input.value ? input.value.trim() : '';
                 if (value) {
-                    data.meta[input.name] = value;
+                    data.meta[inputName] = value;
                 }
             }
         });
@@ -220,24 +282,34 @@ document.addEventListener('DOMContentLoaded', () => {
         // 验证必填的自定义字段
         const customFields = customFieldsContainer.querySelectorAll('input[required]');
         for (const field of customFields) {
-            if (!field.value.trim()) {
+            if (!field.value || !field.value.trim()) {
                 Toast.error(`请填写必填项: ${field.previousElementSibling.textContent.replace(' *', '')}`);
                 field.focus();
                 return;
             }
         }
+        
+        // 调试：输出实际发送的数据
+        console.log('Submitting data:', JSON.stringify(data, null, 2));
+        console.log('Data object keys:', Object.keys(data));
+        console.log('Data.name:', data.name);
+        console.log('Data has uuid?', 'uuid' in data);
 
         // 提交数据
         Loading.button(submitBtn, true);
         submitBtnText.textContent = '提交中...';
 
         try {
+            // 确保 body 是 JSON 字符串，不包含 uuid
+            const requestBody = JSON.stringify(data);
+            console.log('Request body:', requestBody);
+            
             const response = await fetch('/api/bind', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(data)
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: requestBody
             });
 
             const result = await response.json();
@@ -245,7 +317,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (result.success) {
                 Toast.success('绑定成功！正在跳转...');
                 setTimeout(() => {
-                    window.location.href = 'success.html';
+                window.location.href = 'success.html';
                 }, 1000);
             } else {
                 Loading.button(submitBtn, false);

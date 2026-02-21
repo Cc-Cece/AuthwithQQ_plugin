@@ -192,7 +192,7 @@ public class AuthCommand implements CommandExecutor, TabCompleter {
               plugin.getGuestListener().unmarkGuest(onlinePlayer.getUniqueId());
             } else {
               // Player removed from whitelist: check if they should be marked as guest
-              long qq = plugin.getDatabaseManager().getQq(onlinePlayer.getUniqueId());
+              long qq = plugin.getDatabaseManager().getQqByName(onlinePlayer.getName());
               if (qq == 0) {
                 // Player is not bound, mark as guest
                 plugin.getGuestListener().markGuest(onlinePlayer);

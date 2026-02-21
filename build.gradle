@@ -9,7 +9,7 @@ plugins {
 }
 
 group = "com.cccece"
-version = "1.23-onebot-v11-integration-SNAPSHOT"
+version = "1.24-onebot-v11-integration-SNAPSHOT"
 
 java {
     sourceCompatibility = JavaVersion.VERSION_21

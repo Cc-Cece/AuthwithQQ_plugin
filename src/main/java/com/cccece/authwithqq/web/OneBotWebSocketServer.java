@@ -22,6 +22,7 @@ import java.util.logging.Level;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.bukkit.Bukkit;
+import org.bukkit.entity.Player;
 import org.java_websocket.WebSocket;
 import org.java_websocket.handshake.ClientHandshake;
 import org.java_websocket.server.WebSocketServer;
@@ -520,6 +521,13 @@ public class OneBotWebSocketServer extends WebSocketServer {
         DatabaseManager db = plugin.getDatabaseManager();
         db.updateBinding(playerUuid, qq);
         plugin.invalidateCode(playerName);
+        // Update guest status immediately if player is online
+        Player onlinePlayer = Bukkit.getPlayer(playerUuid);
+        if (onlinePlayer != null) {
+          plugin.getGuestListener().unmarkGuest(playerUuid);
+        } else {
+          plugin.handleBindingChange(playerUuid, qq);
+        }
         return null;
       });
       bindFuture.get();
@@ -897,6 +905,13 @@ public class OneBotWebSocketServer extends WebSocketServer {
       // 执行绑定
       Future<Void> bindFuture = Bukkit.getScheduler().callSyncMethod(plugin, () -> {
         plugin.getDatabaseManager().updateBinding(playerUuid, targetQq);
+        // Update guest status immediately if player is online
+        Player onlinePlayer = Bukkit.getPlayer(playerUuid);
+        if (onlinePlayer != null) {
+          plugin.getGuestListener().unmarkGuest(playerUuid);
+        } else {
+          plugin.handleBindingChange(playerUuid, targetQq);
+        }
         return null;
       });
       bindFuture.get();

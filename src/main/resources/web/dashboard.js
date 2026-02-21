@@ -248,21 +248,21 @@ document.addEventListener('DOMContentLoaded', () => {
             const now = new Date();
             const timeLabel = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
             tpsChart.data.labels.push(timeLabel);
-            tpsChart.data.datasets[0].data.push(data.tps);
+                tpsChart.data.datasets[0].data.push(data.tps);
             
             // 限制数据点数量
             if (tpsChart.data.labels.length > maxChartPoints) {
-                tpsChart.data.labels.shift();
-                tpsChart.data.datasets[0].data.shift();
-            }
+                    tpsChart.data.labels.shift();
+                    tpsChart.data.datasets[0].data.shift();
+                }
             tpsChart.update('none'); // 'none' 禁用动画以提高性能
-            
+
             // 更新内存
-            const memoryUsed = data.ram_total - data.ram_free;
+                const memoryUsed = data.ram_total - data.ram_free;
             const memoryPercent = Math.round((memoryUsed / data.ram_total) * 100);
 
             // 更新内存进度条（在TPS卡片内）
-            memoryProgress.style.width = `${memoryPercent}%`;
+                memoryProgress.style.width = `${memoryPercent}%`;
             memoryLabel.textContent = `${memoryPercent}%`;
             memoryProgressValue.textContent = `使用: ${memoryUsed}MB / 总计: ${data.ram_total}MB`;
             
@@ -288,26 +288,26 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // 更新在线玩家
             const playersPercent = Math.round((data.online_players / data.max_players) * 100);
-            playersProgress.style.width = `${playersPercent}%`;
+                playersProgress.style.width = `${playersPercent}%`;
             playersLabel.textContent = `${playersPercent}%`;
             playersValue.textContent = `在线: ${data.online_players} / 最大: ${data.max_players}`;
-            
+
             // 更新玩家列表
-            onlinePlayersList.innerHTML = '';
+                onlinePlayersList.innerHTML = '';
             if (data.online_player_names && Array.isArray(data.online_player_names) && data.online_player_names.length > 0) {
-                data.online_player_names.forEach(player => {
-                    const li = document.createElement('li');
+                    data.online_player_names.forEach(player => {
+                        const li = document.createElement('li');
                     li.className = 'player-item';
-                    li.textContent = player;
-                    onlinePlayersList.appendChild(li);
-                });
-            } else {
-                const li = document.createElement('li');
+                        li.textContent = player;
+                        onlinePlayersList.appendChild(li);
+                    });
+                } else {
+                    const li = document.createElement('li');
                 li.className = 'player-item empty';
                 li.textContent = '当前没有在线玩家';
-                onlinePlayersList.appendChild(li);
-            }
-            
+                    onlinePlayersList.appendChild(li);
+                }
+
             // 更新服务器信息
             if (data.uptime_millis !== undefined) {
                 document.getElementById('uptime-value').textContent = formatUptime(data.uptime_millis);
@@ -430,9 +430,9 @@ document.addEventListener('DOMContentLoaded', () => {
     autoRefreshToggle.addEventListener('change', (e) => {
         if (e.target.checked) {
             startAutoRefresh();
-        } else {
+            } else {
             stopAutoRefresh();
-        }
+            }
     });
 
     function startAutoRefresh() {
@@ -452,7 +452,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     if (autoRefreshToggle.checked) {
         startAutoRefresh();
-    }
+            }
     
     // 页面可见性变化时控制自动刷新
     document.addEventListener('visibilitychange', () => {
@@ -463,7 +463,7 @@ document.addEventListener('DOMContentLoaded', () => {
             updateDashboard(); // 立即更新一次
         }
     });
-    
+
     // 清理
     window.addEventListener('beforeunload', () => {
         stopAutoRefresh();
