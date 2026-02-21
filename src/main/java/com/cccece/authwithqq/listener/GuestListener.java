@@ -230,17 +230,26 @@ public class GuestListener implements Listener {
                                                 .clickEvent(ClickEvent.openUrl(webLink)); // Make it clickable
 
     Component finalMessageComponent = Component.empty();
-    String baseMessageTemplate = plugin.getConfig().getString("messages.guest.join-prompt", "&6请绑定您的QQ，验证码：%code%。请访问 %web_link% 进行绑定。");
+    // Read from lang file (zh_CN.yml etc.), not config.yml - so user edits to lang/*.yml take effect
+    String baseMessageTemplate = plugin.getMessagesConfig().getString("messages.guest.join-prompt", "&6请绑定您的QQ，验证码：%code%。请访问 %web_link% 进行绑定。");
 
     // Manually construct the message Component based on displayMethod
     if ("CODE_ONLY".equals(displayMethod)) {
-        // Remove web_link part from message template
-        String processedTemplate = baseMessageTemplate.replace("。请访问 %web_link% 进行绑定。", "");
-        finalMessageComponent = plugin.getMessageManager().getMessage(processedTemplate, Map.of("%code%", verificationCode));
+        // Take part before %web_link% (works for any language), strip trailing "visit" phrase, replace %code%
+        String[] beforeAndAfter = baseMessageTemplate.split("%web_link%", 2);
+        String codeOnlyTemplate = (beforeAndAfter.length > 0) ? beforeAndAfter[0].trim() : baseMessageTemplate;
+        // Remove trailing "。请访问" / ". Visit" etc. that expect a link to follow
+        if (codeOnlyTemplate.endsWith("。请访问")) {
+          codeOnlyTemplate = codeOnlyTemplate.substring(0, codeOnlyTemplate.length() - "。请访问".length());
+        } else if (codeOnlyTemplate.endsWith(". Visit")) {
+          codeOnlyTemplate = codeOnlyTemplate.substring(0, codeOnlyTemplate.length() - ". Visit".length());
+        }
+        String msg = codeOnlyTemplate.replace("%code%", verificationCode);
+        finalMessageComponent = serializer.deserialize(msg);
     } else if ("WEB_ONLY".equals(displayMethod)) {
-        // Remove code part from message template
-        String processedTemplate = baseMessageTemplate.replace("，验证码：%code%", "");
-        // Use a simple split and append to insert the clickable component
+        // Remove code part from template (replace %code% placeholder; works for any language)
+        String processedTemplate = baseMessageTemplate.replace("%code%", "");
+        // Use split and append to insert the clickable link component
         String[] parts = processedTemplate.split("%web_link%", 2); // Split only once
         if (parts.length > 0) {
             finalMessageComponent = serializer.deserialize(parts[0]);

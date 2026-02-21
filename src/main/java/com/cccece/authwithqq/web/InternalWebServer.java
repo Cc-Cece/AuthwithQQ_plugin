@@ -570,19 +570,34 @@ public class InternalWebServer {
       
       List<Map<?, ?>> customFields = new java.util.ArrayList<>();
       
+      // Reload config from file to get latest changes (avoid cached default values)
+      plugin.reloadConfig();
+      org.bukkit.configuration.file.FileConfiguration config = plugin.getConfig();
+      
       // Try new format (classified fields) first
       if ("player".equals(type)) {
-        // Use getMapList which handles List<Map> directly
-        List<Map<?, ?>> playerFields = plugin.getConfig().getMapList("binding.custom-fields.player");
-        if (playerFields != null && !playerFields.isEmpty()) {
-          customFields = playerFields;
+        // Check if the configuration path actually exists in the file (not just default value)
+        // Use contains() with exact=true to check if the path is explicitly set
+        String path = "binding.custom-fields.player";
+        if (config.contains(path, true)) {
+          // Path exists in config file, read the list
+          List<Map<?, ?>> playerFields = config.getMapList(path);
+          if (playerFields != null && !playerFields.isEmpty()) {
+            customFields = playerFields;
+          }
         }
+        // If path doesn't exist (commented out or removed), customFields remains empty
       } else if ("bot".equals(type)) {
-        // Use getMapList which handles List<Map> directly
-        List<Map<?, ?>> botFields = plugin.getConfig().getMapList("binding.custom-fields.bot");
-        if (botFields != null && !botFields.isEmpty()) {
-          customFields = botFields;
+        // Check if the configuration path actually exists in the file
+        String path = "binding.custom-fields.bot";
+        if (config.contains(path, true)) {
+          // Path exists in config file, read the list
+          List<Map<?, ?>> botFields = config.getMapList(path);
+          if (botFields != null && !botFields.isEmpty()) {
+            customFields = botFields;
+          }
         }
+        // If path doesn't exist (commented out or removed), customFields remains empty
       } else {
         // No type specified or type is invalid, return empty array
         // Frontend should specify type explicitly
@@ -591,9 +606,12 @@ public class InternalWebServer {
       
       // Fallback to old format if new format returned empty and no type was specified
       if (customFields.isEmpty() && type == null) {
-        List<Map<?, ?>> oldFields = plugin.getConfig().getMapList("binding.custom-fields");
-        if (oldFields != null && !oldFields.isEmpty()) {
-          customFields = oldFields;
+        String oldPath = "binding.custom-fields";
+        if (config.contains(oldPath, true) && config.isList(oldPath)) {
+          List<Map<?, ?>> oldFields = config.getMapList(oldPath);
+          if (oldFields != null && !oldFields.isEmpty()) {
+            customFields = oldFields;
+          }
         }
       }
       
@@ -781,32 +799,63 @@ public class InternalWebServer {
       // Sanitize path to prevent directory traversal
       path = path.replace("..", "").replace("//", "/");
 
-      // Construct the resource path within the JAR (e.g., "web/auth.html")
+      // Construct the resource path (e.g., "web/auth.html")
       String resourcePath = "web" + path;
-      if (resourcePath.endsWith("/")) { // Default to index.html for directories
+      if (resourcePath.endsWith("/") || resourcePath.equals("web")) {
         resourcePath += "index.html";
       }
 
-      try (java.io.InputStream is = plugin.getResource(resourcePath)) {
-        if (is == null) {
-          plugin.getLogger().warning("Resource not found: " + resourcePath);
-          sendResponse(exchange, 404, "404 Not Found");
-          return;
+      byte[] responseBytes = null;
+      // 1. Prefer file in plugin directory (allows server owner customization)
+      java.io.File webDir = plugin.getWebResourcesDir();
+      String fileRelativePath = resourcePath.startsWith("web/")
+          ? resourcePath.substring("web/".length())
+          : resourcePath;
+      fileRelativePath = fileRelativePath.replaceFirst("^/+", ""); // Strip leading slashes
+      java.io.File file = new java.io.File(webDir, fileRelativePath);
+      // Ensure resolved path stays within webDir (prevent path traversal)
+      try {
+        String base = webDir.getCanonicalPath() + java.io.File.separator;
+        if (!file.getCanonicalPath().startsWith(base) && !file.getCanonicalPath().equals(webDir.getCanonicalPath())) {
+          file = null;
         }
-
-        // Determine Content-Type based on file extension
-        String contentType = "text/plain";
-        if (resourcePath.endsWith(".html")) {
-          contentType = "text/html";
-        } else if (resourcePath.endsWith(".css")) {
-          contentType = "text/css";
-        } else if (resourcePath.endsWith(".js")) {
-          contentType = "application/javascript";
-        } else if (resourcePath.endsWith(".json")) {
-          contentType = "application/json";
+      } catch (java.io.IOException e) {
+        file = null;
+      }
+      if (file != null && file.exists() && file.isFile()) {
+        try {
+          responseBytes = java.nio.file.Files.readAllBytes(file.toPath());
+        } catch (IOException e) {
+          plugin.getLogger().warning("Could not read web file: " + file.getPath() + " - " + e.getMessage());
         }
+      }
+      // 2. Fallback to JAR resource
+      if (responseBytes == null) {
+        try (java.io.InputStream is = plugin.getResource(resourcePath)) {
+          if (is != null) {
+            responseBytes = is.readAllBytes();
+          }
+        }
+      }
 
-        byte[] responseBytes = is.readAllBytes();
+      if (responseBytes == null) {
+        sendResponse(exchange, 404, "404 Not Found");
+        return;
+      }
+
+      // Determine Content-Type based on file extension
+      String contentType = "text/plain";
+      if (resourcePath.endsWith(".html")) {
+        contentType = "text/html";
+      } else if (resourcePath.endsWith(".css")) {
+        contentType = "text/css";
+      } else if (resourcePath.endsWith(".js")) {
+        contentType = "application/javascript";
+      } else if (resourcePath.endsWith(".json")) {
+        contentType = "application/json";
+      }
+
+      try {
         exchange.getResponseHeaders().set("Content-Type", contentType + "; charset=utf-8");
         exchange.sendResponseHeaders(200, responseBytes.length);
         try (OutputStream os = exchange.getResponseBody()) {

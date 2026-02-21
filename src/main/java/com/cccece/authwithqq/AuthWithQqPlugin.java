@@ -61,11 +61,21 @@ public class AuthWithQqPlugin extends JavaPlugin {
   private final LinkedList<ActivityEntry> recentActivities = new LinkedList<>(); // Recent player activities
   private static final int MAX_RECENT_ACTIVITIES = 50; // Maximum number of activities to keep
 
+  /** Web resource filenames to copy from JAR. Add new files here when adding web pages. */
+  private static final String[] WEB_RESOURCE_FILES = {
+    "admin_edit_player.css", "admin_edit_player.html", "admin_edit_player.js",
+    "admin.css", "admin.html", "admin.js", "auth.css", "auth.html", "auth.js",
+    "common.css", "components.css", "components.js", "dashboard.css", "dashboard.html",
+    "dashboard.js", "edit_bot.html", "edit_bot.js", "index.html", "login.html",
+    "player_dashboard.html", "profile.css", "profile.html", "profile.js", "success.html"
+  };
+
   @Override
   public void onEnable() {
     // Save default config
     saveDefaultConfig();
     saveDefaultLang();
+    saveDefaultWebResources();
     loadMessages();
 
     // Initialize MessageManager
@@ -93,11 +103,15 @@ public class AuthWithQqPlugin extends JavaPlugin {
     // Initialize Commands
     registerCommands();
 
-    // Start Web Server
-    int port = getConfig().getInt("server.port", 8081);
-    String token = getConfig().getString("server.token", "changeme");
-    webServer = new InternalWebServer(this, port, token);
-    getServer().getScheduler().runTaskAsynchronously(this, () -> webServer.start());
+    // Start Web Server (if enabled)
+    if (getConfig().getBoolean("server.enabled", true)) {
+      int port = getConfig().getInt("server.port", 8081);
+      String token = getConfig().getString("server.token", "changeme");
+      webServer = new InternalWebServer(this, port, token);
+      getServer().getScheduler().runTaskAsynchronously(this, () -> webServer.start());
+    } else {
+      getLogger().info("Web server disabled by config (server.enabled=false)");
+    }
 
     // Start OneBot v11 WebSocket server (independent port)
     if (getConfig().getBoolean("onebot.enabled", false)) {
@@ -209,6 +223,30 @@ public class AuthWithQqPlugin extends JavaPlugin {
         saveResource("lang/" + locale + ".yml", false);
       }
     }
+  }
+
+  /**
+   * Copies web resources from JAR to plugin directory if they don't exist.
+   * Allows server owners to customize HTML/CSS/JS. Missing files fall back to JAR.
+   */
+  private void saveDefaultWebResources() {
+    java.io.File webDir = new java.io.File(getDataFolder(), "web");
+    if (!webDir.exists()) {
+      webDir.mkdirs();
+    }
+    for (String filename : WEB_RESOURCE_FILES) {
+      java.io.File dest = new java.io.File(webDir, filename);
+      if (!dest.exists()) {
+        saveResource("web/" + filename, false);
+      }
+    }
+  }
+
+  /**
+   * Returns the web resources directory. Files here override JAR resources.
+   */
+  public java.io.File getWebResourcesDir() {
+    return new java.io.File(getDataFolder(), "web");
   }
 
   /**
