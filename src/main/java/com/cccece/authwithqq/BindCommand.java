@@ -1,6 +1,5 @@
 package com.cccece.authwithqq;
 
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -151,9 +150,7 @@ public class BindCommand implements CommandExecutor, TabCompleter {
             return;
         }
 
-        UUID botUuid = UUID.nameUUIDFromBytes(("Bot-" + botName).getBytes(StandardCharsets.UTF_8));
-        
-        plugin.getDatabaseManager().markPlayerAsBot(botUuid, ownerUuid, botName);
+        plugin.getDatabaseManager().markPlayerAsBot(botName, player.getName());
         
         player.sendMessage(plugin.getMessageManager().getMessage("messages.bind-command.bot.add-success", Collections.singletonMap("%bot_name%", botName)));
     }

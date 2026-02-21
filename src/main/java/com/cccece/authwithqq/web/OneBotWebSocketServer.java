@@ -519,7 +519,7 @@ public class OneBotWebSocketServer extends WebSocketServer {
       Future<Void> bindFuture = Bukkit.getScheduler().callSyncMethod(plugin, () -> {
         DatabaseManager db = plugin.getDatabaseManager();
         db.updateBinding(playerUuid, qq);
-        plugin.invalidateCode(playerUuid);
+        plugin.invalidateCode(playerName);
         return null;
       });
       bindFuture.get();
@@ -580,16 +580,14 @@ public class OneBotWebSocketServer extends WebSocketServer {
         }});
       }
 
-      // Create bot UUID (deterministic based on name)
-      UUID botUuid = UUID.nameUUIDFromBytes(("Bot-" + botName).getBytes(StandardCharsets.UTF_8));
-
-      // Bind bot
-      Future<Void> bindFuture = Bukkit.getScheduler().callSyncMethod(plugin, () -> {
-        plugin.getDatabaseManager().markPlayerAsBot(botUuid, ownerUuid, botName);
+      // Bind bot (uses OfflinePlayer UUID algorithm for consistency when bot joins)
+      String ownerName = plugin.getDatabaseManager().getNameByUuid(ownerUuid);
+      Bukkit.getScheduler().callSyncMethod(plugin, () -> {
+        plugin.getDatabaseManager().markPlayerAsBot(botName, ownerName);
         return null;
-      });
-      bindFuture.get();
+      }).get();
 
+      UUID botUuid = DatabaseManager.offlinePlayerUuid(botName);
       String limitStr = maxBots > 0 ? (currentBotCount + 1) + "/" + maxBots : "无限制";
       return "✅ 假人绑定成功！\n"
           + "━━━━━━━━━━━━━━━\n"
@@ -854,8 +852,8 @@ public class OneBotWebSocketServer extends WebSocketServer {
    */
   private String handleRegisterByAdmin(long targetQq, String mcName) {
     try {
-      // 查找玩家 UUID
       Future<UUID> playerFuture = Bukkit.getScheduler().callSyncMethod(plugin, () -> {
+        plugin.getDatabaseManager().ensurePlayerExists(mcName);
         return plugin.getDatabaseManager().getPlayerUuid(mcName);
       });
       UUID playerUuid = playerFuture.get();

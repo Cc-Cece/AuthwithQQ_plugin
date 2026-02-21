@@ -89,8 +89,10 @@ public class GuestListener implements Listener {
     Player player = event.getPlayer();
     UUID uuid = player.getUniqueId();
     
+    String playerName = player.getName();
     plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
-      plugin.getDatabaseManager().addGuest(uuid, player.getName());
+      plugin.getDatabaseManager().addGuest(uuid, playerName);
+      plugin.getDatabaseManager().ensurePlayerUuidUpdated(playerName, uuid);
       long qq = plugin.getDatabaseManager().getQq(uuid);
 
       plugin.getServer().getScheduler().runTask(plugin, () -> {
@@ -211,7 +213,7 @@ public class GuestListener implements Listener {
     }
 
     // Generate and store verification code with expiration logic
-    String verificationCode = plugin.getOrCreateCode(uuid); // Use centralized manager
+    String verificationCode = plugin.getOrCreateCode(player.getName());
 
     // Construct the web link for binding, including UUID and name for authentication context
     String externalAddress = plugin.getConfig().getString("server.external-address", "127.0.0.1");

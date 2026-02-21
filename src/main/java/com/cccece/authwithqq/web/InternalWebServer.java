@@ -313,29 +313,24 @@ public class InternalWebServer {
       try (BufferedReader reader = new BufferedReader(
           new InputStreamReader(exchange.getRequestBody(), StandardCharsets.UTF_8))) {
         JsonObject body = gson.fromJson(reader, JsonObject.class);
-        String playerUuidString = body.get("uuid").getAsString(); // Get actual player UUID
-        String numericVerificationCode = body.get("code").getAsString(); // Get numeric verification code
+        String playerName = body.has("name") ? body.get("name").getAsString() : null;
+        String numericVerificationCode = body.get("code").getAsString();
         long qq = body.get("qq").getAsLong();
-        
-        UUID uuid;
-        try {
-          uuid = UUID.fromString(playerUuidString); // Parse player UUID correctly
-        } catch (IllegalArgumentException e) {
-          sendResponse(exchange, 400, "Invalid UUID format");
+        if (playerName == null || playerName.trim().isEmpty()) {
+          sendResponse(exchange, 400, "{\"success\":false, \"error\":\"Missing player name\"}");
           return;
         }
+        playerName = playerName.trim();
 
-        // Validate the numeric verification code using the centralized manager
-        if (!plugin.isValidCode(numericVerificationCode, uuid)) {
+        if (!plugin.isValidCode(numericVerificationCode, playerName)) {
           sendResponse(exchange, 400, "{\"success\":false, \"error\":\"验证码无效或已过期\"}");
           return;
         }
 
-        // --- NEW: Multi-Account Binding Check ---
         int maxAccountsPerQq = plugin.getConfig().getInt("binding.max-accounts-per-qq", 1);
-        long existingQqForUuid = plugin.getDatabaseManager().getQq(uuid);
+        long existingQqForPlayer = plugin.getDatabaseManager().getQqByName(playerName);
 
-        if (existingQqForUuid == 0 || existingQqForUuid != qq) { // If not bound or changing QQ
+        if (existingQqForPlayer == 0 || existingQqForPlayer != qq) {
           int currentAccountCount = plugin.getDatabaseManager().getAccountCountByQq(qq);
           if (currentAccountCount >= maxAccountsPerQq) {
             sendResponse(exchange, 400, "{\"success\":false, \"error\":\"此QQ号码已达到绑定上限\"}");
@@ -348,7 +343,7 @@ public class InternalWebServer {
             plugin.getConfig().getBoolean("binding.disallow-web-bind-if-qq-exists", true);
         if (disallowWebBindIfQqExists) {
           int currentAccountCountForQq = plugin.getDatabaseManager().getAccountCountByQq(qq);
-          if (currentAccountCountForQq > 0 && existingQqForUuid != qq) {
+          if (currentAccountCountForQq > 0 && existingQqForPlayer != qq) {
             sendResponse(exchange, 400,
                 "{\"success\":false, \"error\":\"该QQ已绑定过账号，请在QQ群内使用机器人指令进行绑定/换绑\"}");
             return;
@@ -385,19 +380,19 @@ public class InternalWebServer {
         }
         // --- END NEW LOGIC ---
 
-        plugin.getDatabaseManager().updateBinding(uuid, qq);
-        plugin.invalidateCode(uuid); // Invalidate code after successful bind
-        
+        plugin.getDatabaseManager().updateBindingByName(playerName, qq);
+        plugin.invalidateCode(playerName);
         if (body.has("meta") && body.get("meta").isJsonObject()) {
           JsonObject meta = body.getAsJsonObject("meta");
           for (Map.Entry<String, com.google.gson.JsonElement> entry : meta.entrySet()) {
-            plugin.getDatabaseManager().setMeta(uuid, entry.getKey(),
+            plugin.getDatabaseManager().setMeta(playerName, entry.getKey(),
                 entry.getValue().getAsString());
           }
         }
-
-        // Notify plugin about binding status change
-        Bukkit.getScheduler().runTask(plugin, () -> plugin.handleBindingChange(uuid, qq));
+        UUID playerUuid = plugin.getDatabaseManager().getPlayerUuid(playerName);
+        if (playerUuid != null) {
+          Bukkit.getScheduler().runTask(plugin, () -> plugin.handleBindingChange(playerUuid, qq));
+        }
         
         sendResponse(exchange, 200, "{\"success\":true}");
       } catch (Exception e) {
@@ -775,14 +770,8 @@ public class InternalWebServer {
           return;
         }
 
-        // Generate a UUID for the bot (deterministic based on name for consistency)
-        UUID botUuid = UUID.nameUUIDFromBytes(("Bot-" + botName).getBytes(StandardCharsets.UTF_8));
-
-        // Ensure botName is not already bound to another owner
-        // (This check is not explicitly requested but is good practice to prevent bot name conflicts)
-        // ... potentially add logic here to check if botUuid is already owned by someone else
-
-        plugin.getDatabaseManager().markPlayerAsBot(botUuid, ownerUuid, botName);
+        String ownerName = plugin.getDatabaseManager().getNameByUuid(ownerUuid);
+        plugin.getDatabaseManager().markPlayerAsBot(botName, ownerName);
         
         sendResponse(exchange, 200, "{\"success\":true, \"message\":\"Bot " + botName + " bound to owner " + ownerUuid + "\"}");
       } catch (Exception e) {
@@ -1255,7 +1244,7 @@ public class InternalWebServer {
                   case "bot_uuid":
                       try {
                           UUID botUuid = UUID.fromString(keyword);
-                          future = Bukkit.getScheduler().callSyncMethod(plugin, () -> plugin.getDatabaseManager().getOwnerByBotUuid(botUuid));
+                          future = Bukkit.getScheduler().callSyncMethod(plugin, () -> plugin.getDatabaseManager().getBotOwner(botUuid));
                           return future.get();
                       } catch (IllegalArgumentException e) {
                           return null;
@@ -1402,9 +1391,8 @@ public class InternalWebServer {
                     return;
                 }
 
-                UUID botUuid = UUID.nameUUIDFromBytes(("Bot-" + botName).getBytes(StandardCharsets.UTF_8));
-                
-                plugin.getDatabaseManager().markPlayerAsBot(botUuid, ownerUuid, botName);
+                String ownerName = plugin.getDatabaseManager().getNameByUuid(ownerUuid);
+                plugin.getDatabaseManager().markPlayerAsBot(botName, ownerName);
 
                 JsonObject successResponse = new JsonObject();
                 successResponse.addProperty("success", true);

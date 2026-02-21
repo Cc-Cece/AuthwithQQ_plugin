@@ -356,10 +356,9 @@ public class AuthWithQqPlugin extends JavaPlugin {
     return code.toString();
   }
 
-  // --- Verification Code Management ---
-  private final Map<UUID, VerificationCodeEntry> playerVerificationCodes = new HashMap<>();
+  // --- Verification Code Management (keyed by player name) ---
+  private final Map<String, VerificationCodeEntry> playerVerificationCodes = new HashMap<>();
 
-  // Inner class to hold verification code and its generation timestamp
   private static class VerificationCodeEntry {
     final String code;
     final long timestamp;
@@ -370,82 +369,69 @@ public class AuthWithQqPlugin extends JavaPlugin {
     }
   }
 
-  /**
-   * Retrieves an existing verification code for a player or generates a new one if expired or not found.
-   *
-   * @param uuid The player's UUID.
-   * @return The verification code.
-   */
-  public String getOrCreateCode(UUID uuid) {
-    int codeExpiration = getConfig().getInt("binding.code-expiration", 300); // Default 300 seconds
-    VerificationCodeEntry entry = playerVerificationCodes.get(uuid);
-    String verificationCode;
+  /** Normalizes name for verification code lookup. */
+  private static String norm(String name) {
+    return name == null ? "" : name.toLowerCase();
+  }
 
-    if (entry != null && (System.currentTimeMillis() - entry.timestamp) < (codeExpiration * 1000L)) {
-      // Use existing code if not expired
-      verificationCode = entry.code;
-    } else {
-      // Generate new code and store with current timestamp
-      verificationCode = generateCode();
-      playerVerificationCodes.put(uuid, new VerificationCodeEntry(verificationCode, System.currentTimeMillis()));
-    }
-    return verificationCode;
+  public String getOrCreateCode(UUID uuid) {
+    String name = getDatabaseManager().getNameByUuid(uuid);
+    return name != null ? getOrCreateCode(name) : generateCode();
   }
 
   /**
-   * Checks if a given verification code is valid for a player's UUID and is not expired.
-   *
-   * @param code The code to validate.
-   * @param uuid The player's UUID.
-   * @return true if the code is valid and not expired, false otherwise.
+   * Retrieves or generates a verification code for a player (keyed by name).
    */
-  public boolean isValidCode(String code, UUID uuid) {
-    int codeExpiration = getConfig().getInt("binding.code-expiration", 300); // Default 300 seconds
-    VerificationCodeEntry entry = playerVerificationCodes.get(uuid);
+  public String getOrCreateCode(String playerName) {
+    String key = norm(playerName);
+    int codeExpiration = getConfig().getInt("binding.code-expiration", 300);
+    VerificationCodeEntry entry = playerVerificationCodes.get(key);
+    if (entry != null && (System.currentTimeMillis() - entry.timestamp) < (codeExpiration * 1000L)) {
+      return entry.code;
+    }
+    String verificationCode = generateCode();
+    playerVerificationCodes.put(key, new VerificationCodeEntry(verificationCode, System.currentTimeMillis()));
+    return verificationCode;
+  }
 
+  public boolean isValidCode(String code, UUID uuid) {
+    String name = getDatabaseManager().getNameByUuid(uuid);
+    return name != null && isValidCode(code, name);
+  }
+
+  /**
+   * Checks if a verification code is valid for the given player name.
+   */
+  public boolean isValidCode(String code, String playerName) {
+    if (code == null || playerName == null) return false;
+    int codeExpiration = getConfig().getInt("binding.code-expiration", 300);
+    VerificationCodeEntry entry = playerVerificationCodes.get(norm(playerName));
     return entry != null
         && entry.code.equals(code)
         && (System.currentTimeMillis() - entry.timestamp) < (codeExpiration * 1000L);
   }
 
-  /**
-   * Invalidates a verification code for a player, typically after a successful bind.
-   *
-   * @param uuid The player's UUID.
-   */
   public void invalidateCode(UUID uuid) {
-    playerVerificationCodes.remove(uuid);
+    String name = getDatabaseManager().getNameByUuid(uuid);
+    if (name != null) invalidateCode(name);
   }
 
-  /**
-   * Finds a player's UUID and name by their verification code.
-   * This method is designed to be thread-safe for read operations.
-   *
-   * @param code The verification code to search for.
-   * @return A map containing "uuid" and "name", or null if not found or expired.
-   */
+  public void invalidateCode(String playerName) {
+    if (playerName != null) playerVerificationCodes.remove(norm(playerName));
+  }
+
   public Map<String, String> findPlayerInfoByCode(String code) {
-    if (code == null || code.isEmpty()) {
-      return null;
-    }
-    int codeExpiration = getConfig().getInt("binding.code-expiration", 300); // Default 300 seconds
-
-    for (Map.Entry<UUID, VerificationCodeEntry> entry : playerVerificationCodes.entrySet()) {
-      VerificationCodeEntry verificationEntry = entry.getValue();
-      if (verificationEntry.code.equals(code)) {
-        // Check if the code is expired
-        if ((System.currentTimeMillis() - verificationEntry.timestamp) < (codeExpiration * 1000L)) {
-          UUID playerUuid = entry.getKey();
-          String playerName = Bukkit.getOfflinePlayer(playerUuid).getName();
-
-          Map<String, String> playerInfo = new HashMap<>();
-          playerInfo.put("uuid", playerUuid.toString());
-          playerInfo.put("name", playerName != null ? playerName : "");
-          return playerInfo;
-        } else {
-          // Code found but expired
-          return null;
-        }
+    if (code == null || code.isEmpty()) return null;
+    int codeExpiration = getConfig().getInt("binding.code-expiration", 300);
+    for (Map.Entry<String, VerificationCodeEntry> entry : playerVerificationCodes.entrySet()) {
+      VerificationCodeEntry ve = entry.getValue();
+      if (ve.code.equals(code) && (System.currentTimeMillis() - ve.timestamp) < (codeExpiration * 1000L)) {
+        String name = entry.getKey();
+        UUID uuid = getDatabaseManager().getPlayerUuid(name);
+        Map<String, String> info = new HashMap<>();
+        info.put("name", name);
+        info.put("uuid", uuid != null ? uuid.toString() : DatabaseManager.offlinePlayerUuid(name).toString());
+        return info;
       }
     }
     return null; // Code not found

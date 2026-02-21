@@ -279,10 +279,8 @@ public class AuthCommand implements CommandExecutor, TabCompleter {
         return;
       }
 
-      // Generate a UUID for the bot (deterministic based on name for consistency if needed, or random)
-      final UUID botUuid = UUID.nameUUIDFromBytes(("Bot-" + botName).getBytes(StandardCharsets.UTF_8));
-
-      plugin.getDatabaseManager().markPlayerAsBot(botUuid, ownerUuid, botName);
+      plugin.getDatabaseManager().markPlayerAsBot(botName, ownerName);
+      UUID botUuid = com.cccece.authwithqq.database.DatabaseManager.offlinePlayerUuid(botName);
       sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.bot.add-success", new HashMap<String, String>() {{ put("%bot_name%", botName); put("%bot_uuid%", botUuid.toString()); put("%owner_name%", ownerName); put("%owner_uuid%", ownerUuid.toString()); }}));
     });
   }
@@ -303,21 +301,13 @@ public class AuthCommand implements CommandExecutor, TabCompleter {
 
   private void handleUnbindCommand(CommandSender sender, String playerName) {
     Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-      UUID tempPlayerUuid = plugin.getDatabaseManager().getPlayerUuid(playerName);
-      if (tempPlayerUuid == null) {
-        OfflinePlayer offlinePlayer = Bukkit.getOfflinePlayer(playerName);
-        if (offlinePlayer != null && offlinePlayer.hasPlayedBefore()) {
-          tempPlayerUuid = offlinePlayer.getUniqueId();
-        }
-      }
-      final UUID playerUuid = tempPlayerUuid;
-
+      plugin.getDatabaseManager().ensurePlayerExists(playerName);
+      UUID playerUuid = plugin.getDatabaseManager().getPlayerUuid(playerName);
       if (playerUuid == null) {
         sender.sendMessage(plugin.getMessageManager().getMessage("messages.auth.unbind.player-not-found", new HashMap<String, String>() {{ put("%player%", playerName); }}));
         return;
       }
-
-      plugin.getDatabaseManager().updateBinding(playerUuid, 0L); // Set QQ to 0 to unbind
+      plugin.getDatabaseManager().updateBinding(playerUuid, 0L);
 
       // If player is online, send message and unmark as guest
       Player onlinePlayer = Bukkit.getPlayer(playerUuid);
