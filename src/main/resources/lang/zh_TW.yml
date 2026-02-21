@@ -119,6 +119,9 @@ messages:
       remove-not-owned: "&c假人 %bot_name% 不是你的，或者不存在。"
       remove-success: "&a假人 %bot_name% 已成功解除綁定。"
 
+  web:
+    qq-not-in-group: "該QQ尚未在指定QQ群中，無法透過網頁完成綁定，請先加入QQ群並在群內與機器人互動。"
+
   guest:
     join-prompt: "&6請綁定您的QQ，驗證碼：%code%。請訪問 %web_link% 進行綁定。"
     welcome: "&a歡迎回來, %player%!"

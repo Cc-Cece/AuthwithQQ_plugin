@@ -373,8 +373,12 @@ public class InternalWebServer {
           } else {
             boolean inGroups = plugin.getDatabaseManager().isQqInGroups(qq, groups);
             if (!inGroups) {
-              sendResponse(exchange, 400,
-                  "{\"success\":false, \"error\":\"该QQ尚未在指定QQ群中，无法通过网页完成绑定，请先加入QQ群并在群内与机器人交互\"}");
+              String msg = plugin.getMessagesConfig().getString("messages.web.qq-not-in-group",
+                  "该QQ尚未在指定QQ群中，无法通过网页完成绑定，请先加入QQ群并在群内与机器人交互。");
+              JsonObject err = new JsonObject();
+              err.addProperty("success", false);
+              err.addProperty("error", msg);
+              sendResponse(exchange, 400, gson.toJson(err));
               return;
             }
           }

@@ -119,6 +119,9 @@ messages:
       remove-not-owned: "&cBot %bot_name% is not yours or does not exist."
       remove-success: "&aBot %bot_name% has been successfully unbound."
 
+  web:
+    qq-not-in-group: "This QQ is not in the specified group(s). Please join the QQ group and interact with the bot in the group first to complete web binding."
+
   guest:
     join-prompt: "&6Please bind your QQ. Verification code: %code%. Visit %web_link% to bind."
     welcome: "&aWelcome back, %player%!"
