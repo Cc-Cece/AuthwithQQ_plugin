@@ -89,29 +89,17 @@ jobs:
           tag_name: ${{ github.ref == 'refs/heads/main' && 'dev' || format('feature/{0}', github.ref_name) }}
           name: "${{ github.ref == 'refs/heads/main' && format('Latest Dev Build (#{0})', github.run_number) || format('Feature Build: {0} (#{1})', github.ref_name, github.run_number) }}"
           body: |
-            ${{ github.ref != 'refs/heads/main' && format('> [!WARNING]\n> 这是 Feature 分支 `{0}` 的测试构建，仅供测试使用。\n\n', github.ref_name) || '' }}
-            ## 最新构建详情
+            ## 最新构建信息
             - **分支**: `${{ github.ref_name }}`
-            - **构建类型**: ${{ github.ref == 'refs/heads/main' && '正式构建' || 'Feature 测试构建' }}
+            - **构建类型**: ${{ github.ref == 'refs/heads/main' && '正式构建' || 'Feature 构建' }}
             - **项目名称**: `${{ steps.find_asset.outputs.NAME }}`
             - **提交信息**: `${{ github.event.head_commit.message }}`
             - **提交哈希**: `${{ github.sha }}`
             - **构建编号**: `${{ github.run_number }}`
-            
-            ${{ github.ref == 'refs/heads/main' && '> [!TIP]\n> 如果构建通过但有黄色警告，说明代码规范（Checkstyle/SpotBugs）未完全达标。' || '> [!NOTE]\n> 此构建来自 Feature 分支，可能包含未完成的特性，请谨慎使用。' }}
-            
+                        
             ## 历史构建
-            > [!INFO]
+            > [!TIP]
             > 历史构建保存在 GitHub Actions Artifacts 中。
-            > 
-            > **如何下载历史构建：**
-            > 1. 访问 [Actions 页面](https://github.com/${{ github.repository }}/actions)
-            > 2. 找到对应的构建运行记录
-            > 3. 在 Artifacts 部分下载构建产物
-            > 
-            > **Artifact 命名规则：**
-            > - Main 分支: `main-dev-build-{构建号}`
-            > - Feature 分支: `feature-{分支名}-build-{构建号}`
           prerelease: ${{ github.ref != 'refs/heads/main' }}
           make_latest: ${{ github.ref == 'refs/heads/main' }}
           overwrite: true

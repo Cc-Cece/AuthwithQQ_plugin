@@ -328,11 +328,20 @@ public class AuthWithQqPlugin extends JavaPlugin {
       return result;
     }
     for (String param : query.split("&")) {
-      String[] entry = param.split("=");
+      String[] entry = param.split("=", 2);
       if (entry.length > 1) {
-        result.put(entry[0], entry[1]);
-      } else {
-        result.put(entry[0], "");
+        try {
+          result.put(java.net.URLDecoder.decode(entry[0].trim(), java.nio.charset.StandardCharsets.UTF_8),
+              java.net.URLDecoder.decode(entry[1], java.nio.charset.StandardCharsets.UTF_8));
+        } catch (IllegalArgumentException ignored) {
+          result.put(entry[0].trim(), entry[1]);
+        }
+      } else if (entry.length == 1 && !entry[0].isEmpty()) {
+        try {
+          result.put(java.net.URLDecoder.decode(entry[0].trim(), java.nio.charset.StandardCharsets.UTF_8), "");
+        } catch (IllegalArgumentException ignored) {
+          result.put(entry[0].trim(), "");
+        }
       }
     }
     return result;

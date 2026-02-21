@@ -314,6 +314,14 @@ public class InternalWebServer {
           new InputStreamReader(exchange.getRequestBody(), StandardCharsets.UTF_8))) {
         JsonObject body = gson.fromJson(reader, JsonObject.class);
         String playerNameRaw = body.has("name") ? body.get("name").getAsString() : null;
+        if (!body.has("code") || body.get("code").isJsonNull()) {
+          sendResponse(exchange, 400, "{\"success\":false, \"error\":\"Missing verification code\"}");
+          return;
+        }
+        if (!body.has("qq") || body.get("qq").isJsonNull()) {
+          sendResponse(exchange, 400, "{\"success\":false, \"error\":\"Missing qq\"}");
+          return;
+        }
         String numericVerificationCode = body.get("code").getAsString();
         long qq = body.get("qq").getAsLong();
         if (playerNameRaw == null || playerNameRaw.trim().isEmpty()) {
@@ -683,11 +691,8 @@ public class InternalWebServer {
           return;
         }
 
-        // Database modification (set QQ to 0)
+        // Database modification (set QQ to 0; do not delete player record)
         plugin.getDatabaseManager().updateBinding(uuid, 0L);
-        // Delete all bots owned by this player
-        plugin.getDatabaseManager().deletePlayer(uuid);
-
 
         // In-game synchronization
         Bukkit.getScheduler().runTask(plugin, () -> {
