@@ -77,14 +77,23 @@ public class AuthWithQqPlugin extends JavaPlugin {
     // Initialize CsvManager
     csvManager = new CsvManager(this, databaseManager, getLogger());
 
-    // Initialize Listeners
-    guestListener = new GuestListener(this);
-    getServer().getPluginManager().registerEvents(guestListener, this);
+    // Determine plugin mode
+    String pluginMode = getConfig().getString("server.plugin-mode", "standalone");
+    boolean isProxyBackendMode = "proxy-backend".equalsIgnoreCase(pluginMode);
 
-    // Initialize Commands
+    if (isProxyBackendMode) {
+      getLogger().info("Running in proxy-backend mode. GuestListener is disabled; "
+          + "player verification is handled by the Velocity proxy plugin.");
+    } else {
+      // Standalone mode: handle player verification on this server
+      guestListener = new GuestListener(this);
+      getServer().getPluginManager().registerEvents(guestListener, this);
+    }
+
+    // Initialize Commands (available in all modes)
     registerCommands();
 
-    // Start Web Server
+    // Start Web Server (available in all modes)
     int port = getConfig().getInt("server.port", 8081);
     String token = getConfig().getString("server.token", "changeme");
     webServer = new InternalWebServer(this, port, token);
@@ -93,7 +102,7 @@ public class AuthWithQqPlugin extends JavaPlugin {
     // Schedule daily reset task for today's statistics
     scheduleDailyReset();
 
-    getLogger().info("AuthWithQq has been enabled!");
+    getLogger().info("AuthWithQq has been enabled! Mode: " + (isProxyBackendMode ? "proxy-backend" : "standalone"));
   }
 
   private void registerCommands() {
@@ -166,7 +175,9 @@ public class AuthWithQqPlugin extends JavaPlugin {
    * @param uuid The player's UUID.
    */
   public void handleBindingSuccess(UUID uuid) {
-    guestListener.unmarkGuest(uuid);
+    if (guestListener != null) {
+      guestListener.unmarkGuest(uuid);
+    }
   }
 
   /**
@@ -177,6 +188,9 @@ public class AuthWithQqPlugin extends JavaPlugin {
    * @param newQq The new QQ number (0 for unbound).
    */
   public void handleBindingChange(UUID uuid, long newQq) {
+    if (guestListener == null) {
+      return; // proxy-backend mode: Velocity handles player gating
+    }
     // Schedule on main thread to interact with Bukkit API
     getServer().getScheduler().runTask(this, () -> {
       Player player = getServer().getPlayer(uuid);

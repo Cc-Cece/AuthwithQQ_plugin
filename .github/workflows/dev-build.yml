@@ -28,52 +28,76 @@ jobs:
       - name: Grant execute permission
         run: chmod +x gradlew
 
-      # 显式执行 shadowJar 确保生成全量包
+      # 显式执行 shadowJar 确保生成全量包（Paper 和 Velocity 子项目）
       # 使用 --continue 忽略 Checkstyle 等非致命错误
       - name: Build with ShadowJar
-        run: ./gradlew shadowJar --continue
+        run: ./gradlew shadowJar :velocity:shadowJar --continue
 
-      - name: Find Release Asset
-        id: find_asset
+      - name: Find Paper JAR
+        id: find_paper
         run: |
-          # 1. 打印构建目录，方便在 Action 日志中排查
           echo "Files in build/libs:"
           ls -R build/libs
-          
-          # 2. 动态寻找 JAR：排除 plain 瘦包，获取第一个匹配的 jar
-          # 使用 -maxdepth 1 避免抓取到某些缓存目录
-          RELEASE_JAR=$(find build/libs -maxdepth 1 -name "*.jar" ! -name "*-plain.jar" -print -quit)
-          
-          if [ -z "$RELEASE_JAR" ]; then
-            echo "::error::No valid JAR found. Ensure shadowJar task completed."
+          PAPER_JAR=$(find build/libs -maxdepth 1 -name "*.jar" ! -name "*-plain.jar" -print -quit)
+          if [ -z "$PAPER_JAR" ]; then
+            echo "::error::No valid Paper JAR found."
             exit 1
           fi
-          
-          # 3. 设置输出变量
-          echo "PATH=$RELEASE_JAR" >> "$GITHUB_OUTPUT"
-          echo "NAME=$(basename $RELEASE_JAR)" >> "$GITHUB_OUTPUT"
-          echo "Found Asset: $RELEASE_JAR"
+          echo "PATH=$PAPER_JAR" >> "$GITHUB_OUTPUT"
+          echo "NAME=$(basename $PAPER_JAR)" >> "$GITHUB_OUTPUT"
+          echo "Found Paper JAR: $PAPER_JAR"
 
-      - name: Upload Build Artifact
+      - name: Find Velocity JAR
+        id: find_velocity
+        run: |
+          echo "Files in velocity/build/libs:"
+          ls -R velocity/build/libs
+          VELOCITY_JAR=$(find velocity/build/libs -maxdepth 1 -name "*.jar" ! -name "*-plain.jar" -print -quit)
+          if [ -z "$VELOCITY_JAR" ]; then
+            echo "::error::No valid Velocity JAR found."
+            exit 1
+          fi
+          echo "PATH=$VELOCITY_JAR" >> "$GITHUB_OUTPUT"
+          echo "NAME=$(basename $VELOCITY_JAR)" >> "$GITHUB_OUTPUT"
+          echo "Found Velocity JAR: $VELOCITY_JAR"
+
+      - name: Upload Paper Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: dev-build-${{ github.run_number }}
-          path: ${{ steps.find_asset.outputs.PATH }}
+          name: paper-dev-build-${{ github.run_number }}
+          path: ${{ steps.find_paper.outputs.PATH }}
+          retention-days: 14
+
+      - name: Upload Velocity Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: velocity-dev-build-${{ github.run_number }}
+          path: ${{ steps.find_velocity.outputs.PATH }}
           retention-days: 14
 
       - name: Update Dev Release
         uses: softprops/action-gh-release@v2
         with:
-          files: ${{ steps.find_asset.outputs.PATH }}
+          files: |
+            ${{ steps.find_paper.outputs.PATH }}
+            ${{ steps.find_velocity.outputs.PATH }}
           tag_name: dev
           name: "Latest Dev Build (#${{ github.run_number }})"
           body: |
             ## 🛠 构建详情
-            - **项目名称**: `${{ steps.find_asset.outputs.NAME }}`
+            - **Paper 插件**: `${{ steps.find_paper.outputs.NAME }}`
+            - **Velocity 插件**: `${{ steps.find_velocity.outputs.NAME }}`
             - **提交信息**: `${{ github.event.head_commit.message }}`
             - **提交哈希**: `${{ github.sha }}`
             - **构建编号**: `${{ github.run_number }}`
             
+            ## 📦 安装说明
+            - **单服模式**：只需安装 `${{ steps.find_paper.outputs.NAME }}` 到 Paper 服务器，`server.plugin-mode` 保持默认 `standalone`。
+            - **群组服模式**：
+              1. 将 `${{ steps.find_paper.outputs.NAME }}` 安装到各 Paper 后端，设置 `server.plugin-mode: proxy-backend`。
+              2. 将 `${{ steps.find_velocity.outputs.NAME }}` 安装到 Velocity 代理服务器。
+              3. **重要**：确保 Paper 配置中的 `server.token` 与 Velocity 配置中的 `paper-api.token` 完全一致。
+
             > [!TIP]
             > 如果构建通过但有黄色警告，说明代码规范（Checkstyle/SpotBugs）未完全达标。
           prerelease: true

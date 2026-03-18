@@ -1,0 +1,19 @@
+# AuthWithQq-Velocity 配置文件
+# 安装此插件到 Velocity 代理服务器，同时将 Paper 后端的插件模式设置为 proxy-backend。
+
+paper-api:
+  url: "http://127.0.0.1:8081" # Paper 插件 Web 服务器地址（需包含协议和端口）
+  token: "changeme"             # API 令牌（必须与 Paper 插件中的 server.token 保持一致）
+
+messages:
+  # 玩家未绑定QQ时的踢出提示。支持 & 颜色代码，\n 换行。
+  # 可用占位符：%auth_url%（绑定页面地址）
+  not-bound: "&c你的账号尚未绑定QQ！\n&6请访问 &e%auth_url% &6进行绑定。"
+
+# 如果为 true，则当无法连接到 Paper API 时允许玩家通过（放行）；
+# 如果为 false，则在 API 不可用时拒绝玩家登录。
+fail-open: true
+
+whitelist:
+  # 无需验证即可通过的玩家名列表（例如管理员账号）。
+  bypass-usernames: []

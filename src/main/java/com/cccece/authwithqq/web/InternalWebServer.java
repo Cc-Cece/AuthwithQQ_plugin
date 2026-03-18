@@ -78,6 +78,7 @@ public class InternalWebServer {
       server.createContext("/api/auth/login", new AuthLoginHandler()); // New: Web login
       server.createContext("/api/auth/logout", new AuthLogoutHandler()); // New: Web logout
       server.createContext("/api/auth/verify", new AuthVerifyHandler()); // New: Verify session
+      server.createContext("/api/proxy/check", new ProxyCheckHandler()); // Proxy: check binding by UUID
       server.createContext("/", new RedirectHandler("/web/index.html")); // Redirect to index
       server.createContext("/dashboard", new RedirectHandler("/web/dashboard.html")); // Explicit dashboard route
       server.createContext("/admin", new AuthenticatedRedirectHandler("/web/admin.html")); // Admin console
@@ -1836,5 +1837,39 @@ public class InternalWebServer {
             sendResponse(exchange, 200, gson.toJson(response));
         }
     }
+
+  /**
+   * Handles requests from the Velocity proxy plugin to check whether a player UUID is bound.
+   * Used exclusively in proxy-backend mode.
+   * GET /api/proxy/check?uuid=&lt;uuid&gt;
+   * Requires X-API-Token header.
+   * Response: {"bound": true/false, "qq": 1234567890} (qq only present when bound)
+   */
+  private class ProxyCheckHandler implements HttpHandler {
+    @Override
+    public void handle(HttpExchange exchange) throws IOException {
+      if (!authenticateWithResponse(exchange)) {
+        return;
+      }
+      Map<String, String> query = AuthWithQqPlugin.parseQuery(exchange.getRequestURI().getQuery());
+      String uuidStr = query.get("uuid");
+      if (uuidStr == null || uuidStr.isEmpty()) {
+        sendResponse(exchange, 400, "{\"error\":\"Missing uuid parameter\"}");
+        return;
+      }
+      try {
+        UUID uuid = UUID.fromString(uuidStr);
+        long qq = plugin.getDatabaseManager().getQq(uuid);
+        JsonObject json = new JsonObject();
+        json.addProperty("bound", qq != 0);
+        if (qq != 0) {
+          json.addProperty("qq", qq);
+        }
+        sendResponse(exchange, 200, gson.toJson(json));
+      } catch (IllegalArgumentException e) {
+        sendResponse(exchange, 400, "{\"error\":\"Invalid UUID format\"}");
+      }
+    }
+  }
 }
       
