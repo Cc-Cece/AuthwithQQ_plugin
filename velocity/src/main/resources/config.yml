@@ -2,8 +2,10 @@
 # 安装此插件到 Velocity 代理服务器，同时将 Paper 后端的插件模式设置为 proxy-backend。
 
 paper-api:
-  url: "http://127.0.0.1:8081" # Paper 插件 Web 服务器地址（需包含协议和端口）
+  url: "http://127.0.0.1:8081" # Paper 插件 Web 服务器地址（仅供 Velocity 代理访问，需包含协议和端口）
   token: "changeme"             # API 令牌（必须与 Paper 插件中的 server.token 保持一致）
+
+public-web-url: "https://example.com/auth" # 玩家在踢出消息中看到的公开绑定页面地址；不要填 127.0.0.1 之类内网地址
 
 messages:
   # 玩家未绑定QQ时的踢出提示。支持 & 颜色代码，\n 换行。
@@ -12,7 +14,7 @@ messages:
 
 # 如果为 true，则当无法连接到 Paper API 时允许玩家通过（放行）；
 # 如果为 false，则在 API 不可用时拒绝玩家登录。
-fail-open: true
+fail-open: false
 
 whitelist:
   # 无需验证即可通过的玩家名列表（例如管理员账号）。

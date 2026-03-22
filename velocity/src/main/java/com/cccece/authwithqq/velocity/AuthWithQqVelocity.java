@@ -68,7 +68,10 @@ public class AuthWithQqVelocity {
     this.dataDirectory = dataDirectory;
 
     loadConfig();
-    logger.info("AuthWithQq-Velocity has been initialized.");
+    String apiUrl = config.node("paper-api", "url").getString("http://127.0.0.1:8081");
+    String publicWebUrl = config.node("public-web-url").getString(apiUrl + "/web/auth.html");
+    boolean failOpen = config.node("fail-open").getBoolean(false);
+    logger.info("AuthWithQq-Velocity has been initialized. paperApiUrl={}, publicWebUrl={}, failOpen={}", apiUrl, publicWebUrl, failOpen);
   }
 
   private void loadConfig() {
@@ -120,12 +123,13 @@ public class AuthWithQqVelocity {
 
       String apiUrl = config.node("paper-api", "url").getString("http://127.0.0.1:8081");
       String apiToken = config.node("paper-api", "token").getString("changeme");
-      boolean failOpen = config.node("fail-open").getBoolean(true);
+      String publicWebUrl = config.node("public-web-url").getString(apiUrl + "/web/auth.html");
+      boolean failOpen = config.node("fail-open").getBoolean(false);
 
       try {
         boolean isBound = checkBinding(uuid, apiUrl, apiToken);
         if (!isBound) {
-          String authUrl = apiUrl + "/web/auth.html";
+          String authUrl = publicWebUrl;
           String message = config.node("messages", "not-bound")
               .getString("&c你的账号尚未绑定QQ！\n&6请访问 %auth_url% 进行绑定。");
           message = message.replace("%auth_url%", authUrl);
@@ -134,7 +138,7 @@ public class AuthWithQqVelocity {
           event.setResult(ResultedEvent.ComponentResult.denied(kickMessage));
         }
       } catch (IOException e) {
-        logger.warn("Failed to check binding for {}: {}", username, e.getMessage());
+        logger.warn("Failed to check binding for {} via {} (failOpen={}): {}", username, apiUrl, failOpen, e.getMessage());
         if (!failOpen) {
           Component errorMessage = LegacyComponentSerializer.legacyAmpersand()
               .deserialize("&c无法验证账号绑定状态，请联系管理员。");

@@ -82,8 +82,8 @@ public class AuthWithQqPlugin extends JavaPlugin {
     boolean isProxyBackendMode = "proxy-backend".equalsIgnoreCase(pluginMode);
 
     if (isProxyBackendMode) {
-      getLogger().info("Running in proxy-backend mode. GuestListener is disabled; "
-          + "player verification is handled by the Velocity proxy plugin.");
+      getLogger().warning("Running in proxy-backend mode. GuestListener is disabled; player verification is handled by the Velocity proxy plugin.");
+      getLogger().warning("Make sure players cannot bypass the proxy and connect to this backend directly.");
     } else {
       // Standalone mode: handle player verification on this server
       guestListener = new GuestListener(this);
