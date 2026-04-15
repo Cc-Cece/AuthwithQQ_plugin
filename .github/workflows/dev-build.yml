@@ -62,7 +62,7 @@ jobs:
           retention-days: 14
 
       - name: Update Dev Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: ${{ steps.find_asset.outputs.PATH }}
           tag_name: dev
